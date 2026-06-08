@@ -174,7 +174,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 	int numMrg = 0;
 	int numMini = 0;
 	int numKis = 0;
-	int numBVA = 0;
+	int numVivi = 0;
 	int numPre = 0;
 
 	// Add solvers from full cycles on previous ranks
@@ -193,7 +193,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 		case PortfolioSequence::MERGESAT: solverToAdd = &numMrg; break;
 		case PortfolioSequence::MINISAT: solverToAdd = &numMini; break;
 		case PortfolioSequence::KISSAT: solverToAdd = &numKis; break;
-		case PortfolioSequence::VARIABLE_ADDITION: solverToAdd = &numBVA; break;
+		case PortfolioSequence::VIVIFICATION_ONLY: solverToAdd = &numVivi; break;
 		case PortfolioSequence::PREPROCESSOR: solverToAdd = &numPre; break;
 		}
 		*solverToAdd += numFullCycles + (i < begunCyclePos);
@@ -311,7 +311,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 			case PortfolioSequence::MINISAT: setup.diversificationIndex = numMini++; break;
 			case PortfolioSequence::GLUCOSE: setup.diversificationIndex = numGlu++; break;
 			case PortfolioSequence::KISSAT: setup.diversificationIndex = numKis++; break;
-			case PortfolioSequence::VARIABLE_ADDITION: setup.diversificationIndex = numBVA++; break;
+			case PortfolioSequence::VIVIFICATION_ONLY: setup.diversificationIndex = numVivi++; break;
 			case PortfolioSequence::PREPROCESSOR: setup.diversificationIndex = numPre++; break;
 			}
 			setup.diversificationIndex += divOffsetCycle;
@@ -356,19 +356,20 @@ std::shared_ptr<PortfolioSolverInterface> SatEngine::createSolver(const SolverSe
 #endif
 #if MALLOB_USE_CADICAL
 	case 'c':
+	case 'v': // vivification via CaDiCaL
 	case 'C':
 		// Cadical
-		LOGGER(_logger, V4_VVER, "S%i : Cadical-%i\n", setup.globalId, setup.diversificationIndex);
+		LOGGER(_logger, V4_VVER, "S%i : Cadical-%i\n", setup.globalId, 
+			setup.solverType == 'v' ? "-Vivify only": "",
+			setup.diversificationIndex);
 		solver.reset(new Cadical(setup));
 		break;
 #endif
 #if MALLOB_USE_KISSAT
 	case 'k':
-	case 'v': // variable addition via Kissat
 	case 'p': // preprocessing via Kissat
 		// Kissat
 		LOGGER(_logger, V4_VVER, "S%i : Kissat%s%s-%i\n", setup.globalId,
-			setup.solverType == 'v' ? "-BVA": "",
 			setup.solverType == 'p' ? "-pre": "",
 			setup.diversificationIndex);
 		solver.reset(new Kissat(setup));
