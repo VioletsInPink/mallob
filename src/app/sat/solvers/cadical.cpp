@@ -172,6 +172,14 @@ void Cadical::diversify(int seed) {
 		okay = solver->set("fanout", 1); assert(okay);
 	}
 
+  if (_setup.solverType == 'v') {
+      LOGGER(_logger, V3_VERB, "vivification only\n");
+			// TODO: config
+
+			// we skip the flavour, as this should be independent
+      return;
+  }
+
 	if (_setup.flavour == PortfolioSequence::SAT) {
 		switch (getDiversificationIndex() % 3) {
 		case 0: okay = solver->configure("sat"); break;

@@ -132,13 +132,6 @@ void Kissat::diversify(int seed) {
             kissat_set_option(solver, "substitute", 0);
     }
 
-    if (_setup.solverType == 'v') {
-        configureBoundedVariableAddition();
-        seedSet = true;
-        interruptionInitialized = true;
-        return;
-    }
-
     if (_setup.solverType == 'p') {
         LOGGER(_logger, V3_VERB, "Formula before preprocessing: %i vars, %i clauses\n",
             _setup.numVars, _setup.numOriginalClauses);
