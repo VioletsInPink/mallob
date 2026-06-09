@@ -369,7 +369,7 @@ std::shared_ptr<PortfolioSolverInterface> SatEngine::createSolver(const SolverSe
 	case 'k':
 	case 'p': // preprocessing via Kissat
 		// Kissat
-		LOGGER(_logger, V4_VVER, "S%i : Kissat%s%s-%i\n", setup.globalId,
+		LOGGER(_logger, V4_VVER, "S%i : Kissat%s-%i\n", setup.globalId,
 			setup.solverType == 'p' ? "-pre": "",
 			setup.diversificationIndex);
 		solver.reset(new Kissat(setup));
