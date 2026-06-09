@@ -174,7 +174,22 @@ void Cadical::diversify(int seed) {
 
   if (_setup.solverType == 'v') {
       LOGGER(_logger, V3_VERB, "vivification only\n");
-			// TODO: config
+
+			// enable inprocessing with vivificatio and disable all not needed functions
+			okay = solver->set("inprocessing", 1);
+			okay &= solver->set("vivify", 1);
+			okay &= solver->set("vivifyonly", 1);
+			okay &= solver->set("subsume", 0);
+
+			okay &= solver->set("restart", 0);
+			okay &= solver->set("reduce", 0);
+			okay &= solver->set("probing", 0);
+			// in the current implementation subsume () in CaDiCal will always be true.
+			// therefore the following is not needed and decide() wont be entered.
+			// reordering Internal::cdcl_loop_with_inprocessing () in cadical will break this; 
+			// okay &= solver->set("elim", 0);
+			// okay &= solver->set("compact", 0);
+			// okay &= solver->set("comdition", 0);
 
 			// we skip the flavour, as this should be independent
       return;
