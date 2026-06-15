@@ -301,6 +301,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 	// Iterate over solvers to get the amount of each type
 	int cyclePos = begunCyclePos;
 	for (setup.localId = 0; setup.localId < _num_solvers; setup.localId++) {
+		setup.globalId = appRank * numOrigSolvers + setup.localId;
 		if (setup.globalId >= portfolio.prefix.size()) {
 			PortfolioSequence::Item item = portfolio.cycle[cyclePos];
 			switch (item.baseSolver) {
