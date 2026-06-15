@@ -71,8 +71,8 @@ Cadical::Cadical(const SolverSetup& setup)
 		okay = solver->set("lrat", 1); assert(okay); // enable LRAT proof logging
 		okay = solver->set("lratsolverid", solverRank); assert(okay); // set this solver instance's ID
 		okay = solver->set("lratsolvercount", maxNumSolvers); assert(okay); // set # solvers
-		okay = solver->set("lratinstanceid", getDiversificationIndex()); assert(okay); // set this as the n'th solver of this instance
-		okay = solver->set("lratinstancecount", getDiversificationCount()); assert(okay); // set # instances of this type of cadical
+		okay = solver->set("lrattypeid", getDiversificationIndex()); assert(okay); // set this as the n'th solver of this type
+		okay = solver->set("lrattypecount", getDiversificationCount()); assert(okay); // set # instances of this type of cadical
 		okay = solver->set("lratorigclscount",
 			// For incremental real-time proof checking we need to reserve entire 32-bit domain.
 			// For persistent proof logging, smaller assigned IDs result in smaller proofs.
