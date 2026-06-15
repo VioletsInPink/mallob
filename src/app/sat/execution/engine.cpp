@@ -177,6 +177,16 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 	int numVivi = 0;
 	int numPre = 0;
 
+	// These numbers become the total amount of diversifier indices of the solvers on this node
+	int countLgl = 0;
+	int countGlu = 0;
+	int countCdc = 0;
+	int countMrg = 0;
+	int countMini = 0;
+	int countKis = 0;
+	int countVivi = 0;
+	int countPre = 0;
+
 	// Add solvers from full cycles on previous ranks
 	// and from the begun cycle on the previous rank
 	int numFullCycles = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
@@ -288,8 +298,27 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 		FileUtils::mkdir(dir);
 	}
 
-	// Instantiate solvers according to the global solver IDs and diversification indices
+	// Iterate over solvers to get the amount of each type
 	int cyclePos = begunCyclePos;
+	for (setup.localId = 0; setup.localId < _num_solvers; setup.localId++) {
+		if (setup.globalId >= portfolio.prefix.size()) {
+			PortfolioSequence::Item item = portfolio.cycle[cyclePos];
+			switch (item.baseSolver) {
+			case PortfolioSequence::LINGELING: countLgl++; break;
+			case PortfolioSequence::CADICAL: countCdc++; break;
+			case PortfolioSequence::MERGESAT: countMrg++; break;
+			case PortfolioSequence::MINISAT: countMini++; break;
+			case PortfolioSequence::GLUCOSE: countGlu++; break;
+			case PortfolioSequence::KISSAT: countKis++; break;
+			case PortfolioSequence::VIVIFICATION_ONLY: countVivi++; break;
+			case PortfolioSequence::PREPROCESSOR: countPre++; break;
+			}
+		}
+		cyclePos = (cyclePos+1) % portfolio.cycle.size();
+	}
+
+	// Instantiate solvers according to the global solver IDs and diversification indices
+	cyclePos = begunCyclePos;
 	for (setup.localId = 0; setup.localId < _num_solvers; setup.localId++) {
 		setup.globalId = appRank * numOrigSolvers + setup.localId;
 
@@ -315,6 +344,18 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 			case PortfolioSequence::PREPROCESSOR: setup.diversificationIndex = numPre++; break;
 			}
 			setup.diversificationIndex += divOffsetCycle;
+
+			switch (item.baseSolver) {
+			case PortfolioSequence::LINGELING: setup.diversificationCount = countLgl; break;
+			case PortfolioSequence::CADICAL: setup.diversificationCount = countCdc; break;
+			case PortfolioSequence::MERGESAT: setup.diversificationCount = countMrg; break;
+			case PortfolioSequence::MINISAT: setup.diversificationCount = countMini; break;
+			case PortfolioSequence::GLUCOSE: setup.diversificationCount = countGlu; break;
+			case PortfolioSequence::KISSAT: setup.diversificationCount = countKis; break;
+			case PortfolioSequence::VIVIFICATION_ONLY: setup.diversificationCount = countVivi; break;
+			case PortfolioSequence::PREPROCESSOR: setup.diversificationCount = countPre; break;
+			}
+			setup.diversificationCount += divOffsetCycle;
 		}
 		setup.solverType = item.baseSolver;
 		setup.flavour = item.flavour;
