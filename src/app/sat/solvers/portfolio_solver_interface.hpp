@@ -126,6 +126,10 @@ public:
 	 * Equal to the global ID minus the number of solvers of a different type.
 	 */
 	int getDiversificationIndex() {return _diversification_index;}
+	/**
+	 * The number of solvers of this type being employed to compute on this job
+	 */
+	int getDiversificationCount() {return _diversification_count;}
 	
 	void setClauseSharing(int numOriginalDiversifications) {
 		// Skip clause sharing occasionally after original diversification is exhausted
@@ -215,6 +219,7 @@ private:
 	int _global_id;
 	int _local_id;
 	int _diversification_index;
+	int _diversification_count;
 	std::vector<int> _conditional_lits; // to append to each exported clause to make it global
 	std::atomic_bool _terminated = false;
 

@@ -40,6 +40,7 @@ struct SolverSetup {
 	char solverType;
 	bool doIncrementalSolving {false};
 	int diversificationIndex {0};
+	int diversificationCount {0};
 
 	SolvingReplay::Mode replayMode {SolvingReplay::NONE};
 
