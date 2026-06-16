@@ -298,22 +298,20 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 		FileUtils::mkdir(dir);
 	}
 
-	// Iterate over solvers to get the amount of each type
+	// Iterate over solvers without prefix solvers to get the amount of each type
 	int cyclePos = begunCyclePos;
-	for (setup.localId = 0; setup.localId < _num_solvers; setup.localId++) {
-		setup.globalId = appRank * numOrigSolvers + setup.localId;
-		if (setup.globalId >= portfolio.prefix.size()) {
-			PortfolioSequence::Item item = portfolio.cycle[cyclePos];
-			switch (item.baseSolver) {
-			case PortfolioSequence::LINGELING: countLgl++; break;
-			case PortfolioSequence::CADICAL: countCdc++; break;
-			case PortfolioSequence::MERGESAT: countMrg++; break;
-			case PortfolioSequence::MINISAT: countMini++; break;
-			case PortfolioSequence::GLUCOSE: countGlu++; break;
-			case PortfolioSequence::KISSAT: countKis++; break;
-			case PortfolioSequence::VIVIFICATION_ONLY: countVivi++; break;
-			case PortfolioSequence::PREPROCESSOR: countPre++; break;
-			}
+	int numPrefixSolvers = portfolio.prefix.size() - appRank * numOrigSolvers;
+	for (setup.localId = numPrefixSolvers; setup.localId < _num_solvers; setup.localId++) {
+		PortfolioSequence::Item item = portfolio.cycle[cyclePos];
+		switch (item.baseSolver) {
+		case PortfolioSequence::LINGELING: countLgl++; break;
+		case PortfolioSequence::CADICAL: countCdc++; break;
+		case PortfolioSequence::MERGESAT: countMrg++; break;
+		case PortfolioSequence::MINISAT: countMini++; break;
+		case PortfolioSequence::GLUCOSE: countGlu++; break;
+		case PortfolioSequence::KISSAT: countKis++; break;
+		case PortfolioSequence::VIVIFICATION_ONLY: countVivi++; break;
+		case PortfolioSequence::PREPROCESSOR: countPre++; break;
 		}
 		cyclePos = (cyclePos+1) % portfolio.cycle.size();
 	}
