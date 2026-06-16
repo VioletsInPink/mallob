@@ -175,7 +175,7 @@ void Cadical::diversify(int seed) {
 	}
 
   if (_setup.solverType == 'v') {
-    LOGGER(_logger, V3_VERB, "vivification only\n");
+    LOGGER(_logger, V3_VERB, "vivification only -- thread: %d / %d\n", getDiversificationIndex() + 1, getDiversificationCount());
 
     // enable inprocessing with vivificatio and disable all not needed functions
     okay = solver->set("inprocessing", 1);
