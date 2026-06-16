@@ -195,6 +195,7 @@ void Cadical::diversify(int seed) {
     // okay &= solver->set("comdition", 0);
 
     // we skip the flavour, as this should be independent
+    assert(okay);
     return;
   }
 
