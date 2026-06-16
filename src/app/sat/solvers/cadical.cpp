@@ -126,6 +126,10 @@ Cadical::Cadical(const SolverSetup& setup)
 		for (auto [weight, lit] : _setup.objectiveFunction)
 			solver->add_observed_var(std::abs(lit));
 	}
+
+	if (! setup.vivify) {
+		okay = solver->set("vivify", 0); assert(okay);
+	}
 }
 
 void Cadical::addLiteral(int lit) {

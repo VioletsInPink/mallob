@@ -67,6 +67,8 @@ struct SolverSetup {
 	} eliminationSetting {ALLOW_ALL};
 	PortfolioSequence::Flavour flavour {PortfolioSequence::DEFAULT};
 
+	bool vivify {true};
+
 	// Clause export
 
 	bool exportClauses {true}; // exporting clauses to other solvers?

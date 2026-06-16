@@ -222,6 +222,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 
 	// Solver-agnostic options each solver in the portfolio will receive
 	SolverSetup setup;
+	setup.vivify = vivify;
 	setup.logger = &_logger;
 	setup.jobname = config.getJobStr();
 	setup.jobId = config.jobid;
