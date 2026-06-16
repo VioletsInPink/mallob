@@ -71,8 +71,6 @@ Cadical::Cadical(const SolverSetup& setup)
 		okay = solver->set("lrat", 1); assert(okay); // enable LRAT proof logging
 		okay = solver->set("lratsolverid", solverRank); assert(okay); // set this solver instance's ID
 		okay = solver->set("lratsolvercount", maxNumSolvers); assert(okay); // set # solvers
-		okay = solver->set("lrattypeid", getDiversificationIndex()); assert(okay); // set this as the n'th solver of this type
-		okay = solver->set("lrattypecount", getDiversificationCount()); assert(okay); // set # instances of this type of cadical
 		okay = solver->set("lratorigclscount",
 			// For incremental real-time proof checking we need to reserve entire 32-bit domain.
 			// For persistent proof logging, smaller assigned IDs result in smaller proofs.
@@ -175,7 +173,7 @@ void Cadical::diversify(int seed) {
 	}
 
   if (_setup.solverType == 'v') {
-    LOGGER(_logger, V3_VERB, "vivification only -- thread: %d / %d\n", getDiversificationIndex() + 1, getDiversificationCount());
+    LOGGER(_logger, V4_VVER, "vivification only -- thread: %d / %d\n", getDiversificationIndex() + 1, getDiversificationCount());
 
     // enable inprocessing with vivificatio and disable all not needed functions
     okay = solver->set("inprocessing", 1);
@@ -193,6 +191,9 @@ void Cadical::diversify(int seed) {
     // okay &= solver->set("elim", 0);
     // okay &= solver->set("compact", 0);
     // okay &= solver->set("comdition", 0);
+    
+		okay &= solver->set("vivifyonlyid", getDiversificationIndex()); // set this as the n'th solver of this type
+		okay &= solver->set("vivifyonlycount", getDiversificationCount()); // set # instances of this type of cadical
 
     // we skip the flavour, as this should be independent
     assert(okay);
