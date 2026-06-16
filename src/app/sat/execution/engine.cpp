@@ -189,44 +189,35 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 
 	// Add solvers from full cycles on previous ranks
 	// and from the begun cycle on the previous rank
-	int numFullCycles = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
+	// Calculate the total number of Solvers
+	int numFullPreCycles = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
+	int numFullSolverCycles = std::max(0, (int)_num_solvers + appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
+	int numRestSolver = std::max(0, (int)_num_solvers + appRank * numOrigSolvers - (int)portfolio.prefix.size()) % portfolio.cycle.size();
 	int begunCyclePos = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) % portfolio.cycle.size();
 	bool hasPseudoincrementalSolvers = false;
+	bool vivify = true;
 	for (size_t i = 0; i < portfolio.cycle.size(); i++) {
 		int* solverToAdd;
+		int numSolvers = numFullSolverCycles + (i - begunCyclePos < numRestSolver);
 		bool pseudoIncremental = !portfolio.cycle[i].incremental;
 		if (pseudoIncremental) hasPseudoincrementalSolvers = true;
 		switch (portfolio.cycle[i].baseSolver) {
-		case PortfolioSequence::LINGELING: solverToAdd = &numLgl; break;
-		case PortfolioSequence::GLUCOSE: solverToAdd = &numGlu; break;
-		case PortfolioSequence::CADICAL: solverToAdd = &numCdc; break;
-		case PortfolioSequence::MERGESAT: solverToAdd = &numMrg; break;
-		case PortfolioSequence::MINISAT: solverToAdd = &numMini; break;
-		case PortfolioSequence::KISSAT: solverToAdd = &numKis; break;
-		case PortfolioSequence::VIVIFICATION_ONLY: solverToAdd = &numVivi; break;
-		case PortfolioSequence::PREPROCESSOR: solverToAdd = &numPre; break;
+		case PortfolioSequence::LINGELING: solverToAdd = &numLgl; countLgl += numSolvers; break;
+		case PortfolioSequence::GLUCOSE: solverToAdd = &numGlu; countGlu += numSolvers; break;
+		case PortfolioSequence::CADICAL: solverToAdd = &numCdc; countCdc += numSolvers; break;
+		case PortfolioSequence::MERGESAT: solverToAdd = &numMrg; countMrg += numSolvers; break;
+		case PortfolioSequence::MINISAT: solverToAdd = &numMini; countMini += numSolvers; break;
+		case PortfolioSequence::KISSAT: solverToAdd = &numKis; countKis += numSolvers; break;
+		case PortfolioSequence::VIVIFICATION_ONLY: 
+				solverToAdd = &numVivi; countVivi += numSolvers; vivify = portfolio.cycle[i].flavour == PortfolioSequence::SAT; 
+				break;
+		case PortfolioSequence::PREPROCESSOR: solverToAdd = &numPre; countPre += numSolvers; break;
 		}
-		*solverToAdd += numFullCycles + (i < begunCyclePos);
+		*solverToAdd += numFullPreCycles + (i < begunCyclePos);
 	}
 	if (config.incremental && hasPseudoincrementalSolvers) {
 		LOG(V0_CRIT, "[ERROR] Non-incremental solvers are currently unsupported for incremental jobs.\n");
 		abort();
-	}
-
-	// Calculate the total number of Solvers
-	numFullCycles = std::max(0, (int)_num_solvers + appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
-	for (size_t i = 0; i < portfolio.cycle.size(); i++) {
-		int numSolvers = numFullCycles + (i < begunCyclePos);
-		switch (portfolio.cycle[i].baseSolver) {
-		case PortfolioSequence::LINGELING: countLgl += numSolvers; break;
-		case PortfolioSequence::GLUCOSE: countGlu += numSolvers; break;
-		case PortfolioSequence::CADICAL: countCdc += numSolvers; break;
-		case PortfolioSequence::MERGESAT: countMrg += numSolvers; break;
-		case PortfolioSequence::MINISAT: countMini += numSolvers; break;
-		case PortfolioSequence::KISSAT: countKis += numSolvers; break;
-		case PortfolioSequence::VIVIFICATION_ONLY: countVivi += numSolvers; break;
-		case PortfolioSequence::PREPROCESSOR: countPre += numSolvers; break;
-		}
 	}
 
 	// Solver-agnostic options each solver in the portfolio will receive
