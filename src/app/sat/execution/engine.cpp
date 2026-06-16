@@ -213,6 +213,22 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 		abort();
 	}
 
+	// Calculate the total number of Solvers
+	numFullCycles = std::max(0, (int)_num_solvers + appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
+	for (size_t i = 0; i < portfolio.cycle.size(); i++) {
+		int numSolvers = numFullCycles + (i < begunCyclePos);
+		switch (portfolio.cycle[i].baseSolver) {
+		case PortfolioSequence::LINGELING: countLgl += numSolvers; break;
+		case PortfolioSequence::GLUCOSE: countGlu += numSolvers; break;
+		case PortfolioSequence::CADICAL: countCdc += numSolvers; break;
+		case PortfolioSequence::MERGESAT: countMrg += numSolvers; break;
+		case PortfolioSequence::MINISAT: countMini += numSolvers; break;
+		case PortfolioSequence::KISSAT: countKis += numSolvers; break;
+		case PortfolioSequence::VIVIFICATION_ONLY: countVivi += numSolvers; break;
+		case PortfolioSequence::PREPROCESSOR: countPre += numSolvers; break;
+		}
+	}
+
 	// Solver-agnostic options each solver in the portfolio will receive
 	SolverSetup setup;
 	setup.logger = &_logger;
@@ -298,26 +314,8 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 		FileUtils::mkdir(dir);
 	}
 
-	// Iterate over solvers without prefix solvers to get the amount of each type
-	int cyclePos = begunCyclePos;
-	int numPrefixSolvers = portfolio.prefix.size() - appRank * numOrigSolvers;
-	for (setup.localId = numPrefixSolvers; setup.localId < _num_solvers; setup.localId++) {
-		PortfolioSequence::Item item = portfolio.cycle[cyclePos];
-		switch (item.baseSolver) {
-		case PortfolioSequence::LINGELING: countLgl++; break;
-		case PortfolioSequence::CADICAL: countCdc++; break;
-		case PortfolioSequence::MERGESAT: countMrg++; break;
-		case PortfolioSequence::MINISAT: countMini++; break;
-		case PortfolioSequence::GLUCOSE: countGlu++; break;
-		case PortfolioSequence::KISSAT: countKis++; break;
-		case PortfolioSequence::VIVIFICATION_ONLY: countVivi++; break;
-		case PortfolioSequence::PREPROCESSOR: countPre++; break;
-		}
-		cyclePos = (cyclePos+1) % portfolio.cycle.size();
-	}
-
 	// Instantiate solvers according to the global solver IDs and diversification indices
-	cyclePos = begunCyclePos;
+	int cyclePos = begunCyclePos;
 	for (setup.localId = 0; setup.localId < _num_solvers; setup.localId++) {
 		setup.globalId = appRank * numOrigSolvers + setup.localId;
 
