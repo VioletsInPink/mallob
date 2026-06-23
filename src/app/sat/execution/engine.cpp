@@ -177,43 +177,26 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 	int numVivi = 0;
 	int numPre = 0;
 
-	// These numbers become the total amount of diversifier indices of the solvers on this node
-	int countLgl = 0;
-	int countGlu = 0;
-	int countCdc = 0;
-	int countMrg = 0;
-	int countMini = 0;
-	int countKis = 0;
-	int countVivi = 0;
-	int countPre = 0;
-
 	// Add solvers from full cycles on previous ranks
 	// and from the begun cycle on the previous rank
-	// Calculate the total number of Solvers
-	int numFullPreCycles = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
-	int numFullSolverCycles = std::max(0, (int)_num_solvers + appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
-	int numRestSolver = std::max(0, (int)_num_solvers + appRank * numOrigSolvers - (int)portfolio.prefix.size()) % portfolio.cycle.size();
+	int numFullCycles = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
 	int begunCyclePos = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) % portfolio.cycle.size();
 	bool hasPseudoincrementalSolvers = false;
-	bool vivify = true;
 	for (size_t i = 0; i < portfolio.cycle.size(); i++) {
 		int* solverToAdd;
-		int numSolvers = numFullSolverCycles + (i - begunCyclePos < numRestSolver);
 		bool pseudoIncremental = !portfolio.cycle[i].incremental;
 		if (pseudoIncremental) hasPseudoincrementalSolvers = true;
 		switch (portfolio.cycle[i].baseSolver) {
-		case PortfolioSequence::LINGELING: solverToAdd = &numLgl; countLgl += numSolvers; break;
-		case PortfolioSequence::GLUCOSE: solverToAdd = &numGlu; countGlu += numSolvers; break;
-		case PortfolioSequence::CADICAL: solverToAdd = &numCdc; countCdc += numSolvers; break;
-		case PortfolioSequence::MERGESAT: solverToAdd = &numMrg; countMrg += numSolvers; break;
-		case PortfolioSequence::MINISAT: solverToAdd = &numMini; countMini += numSolvers; break;
-		case PortfolioSequence::KISSAT: solverToAdd = &numKis; countKis += numSolvers; break;
-		case PortfolioSequence::VIVIFICATION_ONLY: 
-				solverToAdd = &numVivi; countVivi += numSolvers; vivify = portfolio.cycle[i].flavour == PortfolioSequence::SAT; 
-				break;
-		case PortfolioSequence::PREPROCESSOR: solverToAdd = &numPre; countPre += numSolvers; break;
+		case PortfolioSequence::LINGELING: solverToAdd = &numLgl; break;
+		case PortfolioSequence::GLUCOSE: solverToAdd = &numGlu; break;
+		case PortfolioSequence::CADICAL: solverToAdd = &numCdc; break;
+		case PortfolioSequence::MERGESAT: solverToAdd = &numMrg; break;
+		case PortfolioSequence::MINISAT: solverToAdd = &numMini; break;
+		case PortfolioSequence::KISSAT: solverToAdd = &numKis; break;
+		case PortfolioSequence::VIVIFICATION_ONLY: solverToAdd = &numVivi; break;
+		case PortfolioSequence::PREPROCESSOR: solverToAdd = &numPre; break;
 		}
-		*solverToAdd += numFullPreCycles + (i < begunCyclePos);
+		*solverToAdd += numFullCycles + (i < begunCyclePos);
 	}
 	if (config.incremental && hasPseudoincrementalSolvers) {
 		LOG(V0_CRIT, "[ERROR] Non-incremental solvers are currently unsupported for incremental jobs.\n");
@@ -222,7 +205,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 
 	// Solver-agnostic options each solver in the portfolio will receive
 	SolverSetup setup;
-	setup.vivify = vivify;
+	setup.vivify = false;
 	setup.logger = &_logger;
 	setup.jobname = config.getJobStr();
 	setup.jobId = config.jobid;
@@ -333,18 +316,6 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 			case PortfolioSequence::PREPROCESSOR: setup.diversificationIndex = numPre++; break;
 			}
 			setup.diversificationIndex += divOffsetCycle;
-
-			switch (item.baseSolver) {
-			case PortfolioSequence::LINGELING: setup.diversificationCount = countLgl; break;
-			case PortfolioSequence::CADICAL: setup.diversificationCount = countCdc; break;
-			case PortfolioSequence::MERGESAT: setup.diversificationCount = countMrg; break;
-			case PortfolioSequence::MINISAT: setup.diversificationCount = countMini; break;
-			case PortfolioSequence::GLUCOSE: setup.diversificationCount = countGlu; break;
-			case PortfolioSequence::KISSAT: setup.diversificationCount = countKis; break;
-			case PortfolioSequence::VIVIFICATION_ONLY: setup.diversificationCount = countVivi; break;
-			case PortfolioSequence::PREPROCESSOR: setup.diversificationCount = countPre; break;
-			}
-			setup.diversificationCount += divOffsetCycle;
 		}
 		setup.solverType = item.baseSolver;
 		setup.flavour = item.flavour;
