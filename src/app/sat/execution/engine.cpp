@@ -345,6 +345,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 			case PortfolioSequence::PREPROCESSOR: setup.diversificationIndex = numPre++; break;
 			}
 			setup.diversificationIndex += divOffsetCycle;
+			cyclePos = (cyclePos+1) % portfolio.cycle.size();
 		}
 		setup.solverType = item.baseSolver;
 		setup.flavour = item.flavour;
@@ -361,7 +362,6 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 		setup.exportClauses = !setup.avoidUnsatParticipation;
 
 		_solver_interfaces.push_back(createSolver(setup));
-		cyclePos = (cyclePos+1) % portfolio.cycle.size();
 		auto mclc = _solver_interfaces.back()->getSolverSetup().modelCheckingLratConnector;
 		if (mclc) modelCheckingLratConnector = mclc;
 	}
