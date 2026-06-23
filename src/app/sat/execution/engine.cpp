@@ -175,7 +175,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 	for (size_t i = 0; i < portfolio.prefix.size() && i < numOrigSolvers; i++) {
 		if (portfolio.prefix[i].baseSolver == PortfolioSequence::VIVIFICATION_ONLY) {
 			viviCount += 1;
-			viviIndex += 1;
+			viviIndex += (appRank != 0);
 		}
 	}
 	// cycle through the other solvers
