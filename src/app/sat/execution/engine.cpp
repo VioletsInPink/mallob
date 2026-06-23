@@ -169,7 +169,27 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 
 	// Index and count to track the vivification threads
 	int viviIndex = 0;
-	int viviCount = 1;
+	int viviCount = 0;
+
+	for (size_t i = 0; i < portfolio.prefix.size() && i < numOrigSolvers; i++) {
+		if (portfolio.prefix[i].baseSolver == PortfolioSequence::VIVIFICATION_ONLY) {
+			viviCount += 1;
+			viviIndex += 1;
+		}
+	}
+
+	int totalFullCycles = std::max(0, config.mpisize * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
+	int endPosCycles = std::max(0, config.mpisize * numOrigSolvers - (int)portfolio.prefix.size()) % portfolio.cycle.size();
+	int numFullCycles = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
+	int begunCyclePos = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) % portfolio.cycle.size();
+	for (size_t i = 0; i < portfolio.cycle.size(); i++) {
+		int numSolverToAddToCount = totalFullCycles + (i < endPosCycles);
+		int numSolverToAddToIndex = numFullCycles + (i < begunCyclePos);
+		if (portfolio.cycle[i].baseSolver == PortfolioSequence::VIVIFICATION_ONLY) {
+			viviCount += numSolverToAddToCount;
+			viviIndex += numSolverToAddToIndex;
+		}
+	}
 
 	// These numbers become the diversifier indices of the solvers on this node
 	int numLgl = 0;
@@ -183,8 +203,6 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 
 	// Add solvers from full cycles on previous ranks
 	// and from the begun cycle on the previous rank
-	int numFullCycles = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
-	int begunCyclePos = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) % portfolio.cycle.size();
 	bool hasPseudoincrementalSolvers = false;
 	for (size_t i = 0; i < portfolio.cycle.size(); i++) {
 		int* solverToAdd;
