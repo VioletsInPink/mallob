@@ -171,13 +171,14 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 	int viviIndex = 0;
 	int viviCount = 0;
 
+	// the prefix only exists in rank 0, otherways we want to add the solvers
 	for (size_t i = 0; i < portfolio.prefix.size() && i < numOrigSolvers; i++) {
 		if (portfolio.prefix[i].baseSolver == PortfolioSequence::VIVIFICATION_ONLY) {
 			viviCount += 1;
 			viviIndex += 1;
 		}
 	}
-
+	// cycle through the other solvers
 	int totalFullCycles = std::max(0, config.mpisize * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
 	int endPosCycles = std::max(0, config.mpisize * numOrigSolvers - (int)portfolio.prefix.size()) % portfolio.cycle.size();
 	int numFullCycles = std::max(0, appRank * numOrigSolvers - (int)portfolio.prefix.size()) / portfolio.cycle.size();
