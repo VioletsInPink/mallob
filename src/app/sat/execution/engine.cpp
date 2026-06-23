@@ -167,6 +167,10 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 		LOGGER(_logger, V4_VVER, "Parsed objective\n");
 	}
 
+	// Index and count to track the vivification threads
+	int viviIndex = 0;
+	int viviCount = 1;
+
 	// These numbers become the diversifier indices of the solvers on this node
 	int numLgl = 0;
 	int numGlu = 0;
@@ -312,7 +316,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 			case PortfolioSequence::MINISAT: setup.diversificationIndex = numMini++; break;
 			case PortfolioSequence::GLUCOSE: setup.diversificationIndex = numGlu++; break;
 			case PortfolioSequence::KISSAT: setup.diversificationIndex = numKis++; break;
-			case PortfolioSequence::VIVIFICATION_ONLY: setup.diversificationIndex = numVivi++; break;
+			case PortfolioSequence::VIVIFICATION_ONLY: setup.diversificationIndex = numVivi++; setup.vivifyIndex = viviIndex++; setup.vivifyCount = viviCount; break;
 			case PortfolioSequence::PREPROCESSOR: setup.diversificationIndex = numPre++; break;
 			}
 			setup.diversificationIndex += divOffsetCycle;

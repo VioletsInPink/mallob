@@ -40,7 +40,6 @@ struct SolverSetup {
 	char solverType;
 	bool doIncrementalSolving {false};
 	int diversificationIndex {0};
-	int diversificationCount {0};
 
 	SolvingReplay::Mode replayMode {SolvingReplay::NONE};
 
@@ -67,7 +66,10 @@ struct SolverSetup {
 	} eliminationSetting {ALLOW_ALL};
 	PortfolioSequence::Flavour flavour {PortfolioSequence::DEFAULT};
 
-	bool vivify {true};
+	// cadical vivification
+	bool vivify {true}; // controlles if cadical does vivify in vivify only mode
+	int vivifyIndex {0}; // the index of the vivify only thread
+	int vivifyCount {0}; // the count of the vivify only thread
 
 	// Clause export
 

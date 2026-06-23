@@ -129,7 +129,6 @@ public:
 	/**
 	 * The number of solvers of this type being employed to compute on this job
 	 */
-	int getDiversificationCount() {return _diversification_count;}
 	
 	void setClauseSharing(int numOriginalDiversifications) {
 		// Skip clause sharing occasionally after original diversification is exhausted

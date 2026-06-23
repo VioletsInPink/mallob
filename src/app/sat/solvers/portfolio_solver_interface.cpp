@@ -52,7 +52,6 @@ PortfolioSolverInterface::PortfolioSolverInterface(const SolverSetup& setup)
 		  _job_name(setup.jobname),
 		  _global_id(setup.globalId), _local_id(setup.localId), 
 		  _diversification_index(setup.diversificationIndex),
-		  _diversification_count(setup.diversificationCount),
 		  _import_manager([&]() -> GenericImportManager* {
 			if (setup.adaptiveImportManager) {
 				return new AdaptiveImportManager(setup, _stats);

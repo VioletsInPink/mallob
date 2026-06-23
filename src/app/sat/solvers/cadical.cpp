@@ -130,6 +130,12 @@ Cadical::Cadical(const SolverSetup& setup)
 	if (! setup.vivify) {
 		okay = solver->set("vivify", 0); assert(okay);
 	}
+	
+  if (_setup.solverType == 'v') {
+    LOGGER(_logger, V4_VVER, "vivification only -- thread: %d / %d\n", setup.vivifyIndex + 1, setup.vivifyCount);
+		okay &= solver->set("vivifyonlyid", setup.vivifyIndex); // set this as the n'th solver of this type
+		okay &= solver->set("vivifyonlycount", setup.vivifyCount); // set # instances of this type of cadical
+	}
 }
 
 void Cadical::addLiteral(int lit) {
@@ -177,7 +183,6 @@ void Cadical::diversify(int seed) {
 	}
 
   if (_setup.solverType == 'v') {
-    LOGGER(_logger, V4_VVER, "vivification only -- thread: %d / %d\n", getDiversificationIndex() + 1, getDiversificationCount());
 
     // enable inprocessing with vivificatio and disable all not needed functions
     okay = solver->set("inprocessing", 1);
@@ -196,9 +201,6 @@ void Cadical::diversify(int seed) {
     // okay &= solver->set("compact", 0);
     // okay &= solver->set("comdition", 0);
     
-		okay &= solver->set("vivifyonlyid", getDiversificationIndex()); // set this as the n'th solver of this type
-		okay &= solver->set("vivifyonlycount", getDiversificationCount()); // set # instances of this type of cadical
-
     // we skip the flavour, as this should be independent
     assert(okay);
     return;
