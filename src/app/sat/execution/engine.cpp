@@ -170,13 +170,15 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 	// Index and count to track the vivification threads
 	int viviIndex = 0;
 	int viviCount = 0;
+	bool vivify = true;
 
 	// the prefix only exists in rank 0, otherways we want to add the solvers
-	int prefixOver = std::max(0, (int)portfolio.prefix.size() - appRank * numOrigSolvers)
+	int prefixOver = std::max(0, (int)portfolio.prefix.size() - appRank * numOrigSolvers);
 	for (size_t i = 0; i < portfolio.prefix.size(); i++) {
 		if (portfolio.prefix[i].baseSolver == PortfolioSequence::VIVIFICATION_ONLY) {
 			viviIndex += i >= prefixOver;
 			viviCount += 1;
+			vivify = portfolio.prefix[i].flavour == PortfolioSequence::SAT;
 		}
 	}
 	// cycle through the other solvers
@@ -190,6 +192,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 		if (portfolio.cycle[i].baseSolver == PortfolioSequence::VIVIFICATION_ONLY) {
 			viviCount += numSolverToAddToCount;
 			viviIndex += numSolverToAddToIndex;
+			vivify = portfolio.prefix[i].flavour == PortfolioSequence::SAT;
 		}
 	}
 
@@ -229,7 +232,7 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 
 	// Solver-agnostic options each solver in the portfolio will receive
 	SolverSetup setup;
-	setup.vivify = false;
+	setup.vivify = vivify;
 	setup.logger = &_logger;
 	setup.jobname = config.getJobStr();
 	setup.jobId = config.jobid;
