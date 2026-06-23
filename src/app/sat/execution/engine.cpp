@@ -325,6 +325,11 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 				portfolio.prefix.begin()+setup.globalId,
 				[&](auto& x) {return x.baseSolver == item.baseSolver;});
 			setup.diversificationIndex = nbBefore + divOffsetPrefix;
+
+			if (item.baseSolver == PortfolioSequence::VIVIFICATION_ONLY) {
+				setup.vivifyIndex = viviIndex++; 
+				setup.vivifyCount = viviCount; 
+			}
 		} else {
 			item = portfolio.cycle[cyclePos];
 			switch (item.baseSolver) {
