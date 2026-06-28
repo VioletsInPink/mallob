@@ -304,6 +304,12 @@ SatEngine::SatEngine(const Parameters& params, const SatProcessConfig& config, L
 		FileUtils::mkdir(setup.profilingBaseDir);
 		setup.profilingLevel = params.satProfilingLevel();
 	}
+	if (!params.satLogDir().empty()) {
+		setup.solverLoggingBaseDir = params.satLogDir();
+		setup.solverLoggingBaseDir += "/" + std::to_string(appRank) + "/";
+		FileUtils::mkdir(setup.solverLoggingBaseDir);
+	}
+	
 	setup.memoryFactor = numOrigSolvers / (float)_num_active_solvers;
 	setup.objectiveFunction = _objective;
 

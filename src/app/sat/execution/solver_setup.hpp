@@ -16,6 +16,7 @@ struct SolverSetup {
 	// General important fields
 
 	Logger* logger {nullptr};
+	std::string solverLoggingBaseDir;
 	int globalId {0};
 	int localId {0};
 	std::string jobname;

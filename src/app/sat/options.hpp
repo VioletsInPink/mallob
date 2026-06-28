@@ -18,6 +18,7 @@ OPTION_GROUP(grpAppSat, "app/sat", "SAT solving options")
  OPT_STRING(clauseLog,                      "clause-log", "",                            "",
     "Log successfully shared clauses to the provided path")
  OPT_STRING(satProfilingDir,            "spd", "sat-profiling-dir", "", "Directory to write SAT thread profiling reports to")
+ OPT_STRING(satLogDir,                  "sld", "sat-logging-dir", "", "Directory to write SAT thread logging to")
  OPT_INT(satProfilingLevel,             "spl", "sat-profiling-level", -1, -1, 4, "Profiling level for SAT solvers (-1=none ... 4=all)")
  OPT_BOOL(compressFormula,                  "cf", "compress-formula", false, "Compress formula serialization (reorders clauses and literals in clauses)")
  OPT_BOOL(compressModels,                   "cm", "compress-models", true, "Compress found models into hexadecimal vector in output")

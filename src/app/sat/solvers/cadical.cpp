@@ -47,15 +47,25 @@ Cadical::Cadical(const SolverSetup& setup)
 	solver->connect_terminator(&terminator);
 	solver->connect_learn_source(&learnSource);
 
+	bool okay;
 	if (setup.profilingLevel >= 0) {
-		bool okay = solver->set("profile", setup.profilingLevel); assert(okay);
+		okay = solver->set("profile", setup.profilingLevel); assert(okay);
 		okay = solver->set("realtime", 1); assert(okay);
 		profileFileString = setup.profilingBaseDir + "/profile." + setup.jobname
 			+ "." + std::to_string(setup.globalId);
 		LOGGER(_logger, V3_VERB, "will write profiling to %s\n", profileFileString.c_str());
 	}
 
-	bool okay = solver->set("quiet", 1); assert(okay); // no messy logging output
+	if (setup.solverLoggingBaseDir.empty()) {
+		okay = solver->set("quiet", 1); assert(okay); // no messy logging output
+	} else {
+		okay = solver->set("quiet", 0); assert(okay);
+		okay = solver->set("stats", 1); assert(okay);
+		// Warning: enabling logging will result in massive slow downs.
+		// okay = solver->set("log", 1); assert(okay);
+		solver->set_log_path((_logger.getLogDir() + "/cadical.out." + setup.jobname
+				+ "." + std::to_string(setup.globalId)).c_str());
+	}
 
 	// In certified UNSAT mode?
 	if (setup.certifiedUnsat) {
