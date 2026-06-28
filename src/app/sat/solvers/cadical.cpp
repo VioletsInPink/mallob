@@ -391,6 +391,7 @@ void Cadical::writeStatistics(SolverStatistics& stats) {
 	stats.discarded = s.discarded;
 	LOGGER(_logger, V4_VVER, "disc_reasons r_ed:%ld,r_fx:%ld,r_wit:%ld\n",
         s.r_el, s.r_fx, s.r_wit);
+  solver->statistics();
 }
 
 void Cadical::cleanUp() {
