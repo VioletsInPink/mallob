@@ -127,7 +127,7 @@ Cadical::Cadical(const SolverSetup& setup)
 			solver->add_observed_var(std::abs(lit));
 	}
 
-	if (! setup.vivify) {
+	if (!setup.vivify) {
 		okay = solver->set("vivify", 0); assert(okay);
 	}
 	
@@ -135,6 +135,7 @@ Cadical::Cadical(const SolverSetup& setup)
     LOGGER(_logger, V4_VVER, "vivification only -- thread: %d / %d\n", setup.vivifyIndex + 1, setup.vivifyCount);
 		okay &= solver->set("vivifyonlyid", setup.vivifyIndex); // set this as the n'th solver of this type
 		okay &= solver->set("vivifyonlycount", setup.vivifyCount); // set # instances of this type of cadical
+		assert(okay);
 	}
 }
 
