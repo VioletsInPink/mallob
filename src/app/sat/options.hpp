@@ -18,7 +18,7 @@ OPTION_GROUP(grpAppSat, "app/sat", "SAT solving options")
  OPT_STRING(clauseLog,                      "clause-log", "",                            "",
     "Log successfully shared clauses to the provided path")
  OPT_STRING(satProfilingDir,            "spd", "sat-profiling-dir", "", "Directory to write SAT thread profiling reports to")
- OPT_STRING(satLogDir,                  "sld", "sat-logging-dir", "", "Directory to write SAT thread logging to")
+ OPT_STRING(satLogDir,                  "sld", "sat-logging-dir", "", "Directory to write SAT thread logging to [CaDiCaL only]")
  OPT_INT(satProfilingLevel,             "spl", "sat-profiling-level", -1, -1, 4, "Profiling level for SAT solvers (-1=none ... 4=all)")
  OPT_BOOL(compressFormula,                  "cf", "compress-formula", false, "Compress formula serialization (reorders clauses and literals in clauses)")
  OPT_BOOL(compressModels,                   "cm", "compress-models", true, "Compress found models into hexadecimal vector in output")
@@ -26,6 +26,7 @@ OPTION_GROUP(grpAppSat, "app/sat", "SAT solving options")
  OPT_INT(replay, "replay", "", 0, 0, 2, "0: nothing, 1: record solver threads' behavior, 2: replay solving")
  OPT_BOOL(internalStreamProcessor, "isp", "", true, "For incremental SAT job streams, run a local single-threaded SAT solver for latency hiding")
  OPT_INT(jobSlots, "js", "", 0, 0, LARGE_INT, "Max. concurrent SAT job streams per client process (0: use # MPI processes)")
+ OPT_BOOL(vivify, "vivi", "vivify", true, "Perform vivification, vivify only will always use vivification [CaDiCaL only]")
 
 OPTION_GROUP(grpAppSatSharing, "app/sat/sharing", "Clause sharing configuration")
  OPT_INT(bufferedImportedClsGenerations,    "bicg", "buffered-imported-cls-generations", 4,        1,   LARGE_INT, 
