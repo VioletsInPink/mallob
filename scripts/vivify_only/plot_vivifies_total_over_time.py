@@ -144,14 +144,14 @@ def main():
         # plot a total line
 
         if total_vivi_times:
-            ax.plot(total_vivi_times, total_vivi_values, label="vivify only", linestyle="--", marker="x", ms=8)
+            ax.plot(total_vivi_times, total_vivi_values, label="vivify only", linestyle="None", marker="x", ms=8)
         if total_c_times:
             ax.plot(total_c_times, total_c_values, label="cadical", linestyle="None", marker="x", ms=8)
         if total_times:
             ax.plot(total_times, total_values, label="total", linestyle="--")
 
         if total_vivi_times:
-            axins.plot(total_vivi_times, total_vivi_values, label="vivify only", linestyle="--", marker="x", ms=8)
+            axins.plot(total_vivi_times, total_vivi_values, label="vivify only", linestyle="None", marker="x", ms=8)
         if total_c_times:
             axins.plot(total_c_times, total_c_values, label="cadical", linestyle="None", marker="x", ms=8)
         if total_times:
