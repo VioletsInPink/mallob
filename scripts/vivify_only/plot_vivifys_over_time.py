@@ -81,6 +81,9 @@ def main():
         if k in series:
             vivified[k] = series[k]
 
+    if not vivified:
+        print("did not vivify: skip")
+        return
 
     # create a total counr
     total = Counter()

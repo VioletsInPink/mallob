@@ -4,7 +4,7 @@ set -e  # stop on error
 
 NPROCS=4
 
-FILES=("r3unsat_200" "r3unsat_300" "r3unsat_250" "r3sat_200.cnf" "r3sat_300.cnf")
+FILES=("r3unsat_200" "r3unsat_250" "r3unsat_300" "r3sat_200" "r3sat_300")
 VIVI_VALUES=(0 1)
 
 for file in "${FILES[@]}"; do

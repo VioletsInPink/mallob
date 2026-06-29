@@ -73,6 +73,9 @@ def main():
         return
 
     series = merge_all(files)
+    if not series:
+        print("no data: skip")
+        return
 
     # print(series)
 
