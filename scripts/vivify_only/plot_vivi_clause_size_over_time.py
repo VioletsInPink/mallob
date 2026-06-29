@@ -88,9 +88,10 @@ def main():
                 xs.append(t)
                 ys.append(d)
 
-        plt.scatter(xs, ys, marker=marker, label=name, s=8)
+        if xs:
+            plt.scatter(xs, ys, marker=marker, label=name, s=8)
 
-    plt.xlabel("Time")
+    plt.xlabel("Solver Time")
     plt.ylabel("Clause length")
     plt.legend()
     plt.title("Length of vivified clauses over time")
@@ -110,7 +111,7 @@ def main():
 
     plt.xlabel("clause length")
     plt.ylabel("occurence count")
-    plt.title("Occurences of Clause length")
+    plt.title("Occurences of Clause length in vivified clauses")
     plt.savefig(sys.argv[2] + "clause_length_distribution.svg")
 
 main()

@@ -46,7 +46,7 @@ for file in "${FILES[@]}"; do
     python scripts/vivify_only/plot_vivi_clause_size_over_time.py \
       log "${OUTNAME}"
 
-    python scripts/vivify_only/plot_vivifys_over_time.py \
+    python scripts/vivify_only/plot_vivifies_total_over_time.py \
       log "${OUTNAME}"
 
   done
