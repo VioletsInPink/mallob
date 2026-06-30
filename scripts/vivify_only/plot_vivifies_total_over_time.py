@@ -15,7 +15,7 @@ pattern_data = re.compile(r'\((\d+)\)')
 pattern_type = re.compile(r'vivify (checked|subsumed|strengthened|found)')
 pattern_vivi = re.compile(r'\((c|v)\)')
 
-def parse_file(fname, data):
+def parse_file(fname, data, checked):
 
     with open(fname, "r") as f:
         for line in f:
@@ -47,8 +47,6 @@ def parse_file(fname, data):
             if k == "found":
                 k = "unit"
 
-            if k == "checked":
-                continue
 
             v = pattern_vivi.search(line)
             if not v:
@@ -57,6 +55,14 @@ def parse_file(fname, data):
             v = v.group(1)
 
             # print(t, k, d)
+
+
+            if k == "checked":
+                if t in checked:
+                    checked[t] += d
+                else:
+                    checked[t] = d
+                continue
 
             if t in data[k]:
                 data[v][k][t] += d
@@ -68,11 +74,12 @@ def parse_file(fname, data):
 
 def merge_all(files):
     series = defaultdict(lambda: defaultdict(dict))
+    checked = defaultdict(int)
 
     for f in files:
-        parse_file(f, series)
+        parse_file(f, series, checked)
 
-    return series
+    return series, checked
 
 
 def main():
@@ -82,11 +89,16 @@ def main():
         print("No cadical.out.#*.* files found")
         return
 
-    series = merge_all(files)
+    series, checked = merge_all(files)
 
     if not series:
         print("did not vivify: skip")
         return
+
+    # create a total count
+    total_checked_sorted = sorted(checked.items())
+    total_checked_times = [t for t, v in total_checked_sorted]
+    total_checked_values = [v for t, v in total_checked_sorted]
 
     # create a total count
     total_vivi = Counter()
@@ -117,78 +129,90 @@ def main():
     total_times = [t for t, v in total_sorted]
     total_values = [v for t, v in total_sorted]
 
-    # calculate a ratio
-    vals = list(total.values())
 
+
+    fig, (ax, axins) = plt.subplots(2, 1)
+
+    vals = np.array(list(total.values()))
+    threshold = np.percentile(vals, 95)
+    axins.set_ylim(0, threshold * 1.3)
+
+
+    # calculate a ratio for checked
+    vals = list(total_checked_values)
     avg = sum(vals) / len(vals)
     mx = max(vals)
-
     spike_ratio = mx / avg if avg > 0 else 0
-
-    if (spike_ratio > 10):
-        fig, (ax, axins) = plt.subplots(2, 1)
-        vals = np.array(list(total.values()))
+    if (spike_ratio > 8) :  
+        print("checked spike detected");
+        vals = np.array(list(total_checked_values))
         threshold = np.percentile(vals, 95)
-        axins.set_ylim(0, threshold + 2)
-
-        # # plot individual series
-        # for name, data in vivified.items():
-        #     items = sorted(data.items())
-        #     times = [t for t, v in items]
-        #     values = [v for t, v in items]
-        #
-        #     # plt.plot(times, values, label=name, linestyle="None", marker='x')
-        #     ax.plot(times, values, label=name, linestyle="None", marker='x')
-        #     axins.plot(times, values, label=name, linestyle="None", marker='x')
-
-        # plot a total line
-
-        if total_vivi_times:
-            ax.plot(total_vivi_times, total_vivi_values, label="vivify only", linestyle="None", marker="x", ms=8)
-        if total_c_times:
-            ax.plot(total_c_times, total_c_values, label="cadical", linestyle="None", marker="x", ms=8)
-        if total_times:
-            ax.plot(total_times, total_values, label="total", linestyle="--")
-
-        if total_vivi_times:
-            axins.plot(total_vivi_times, total_vivi_values, label="vivify only", linestyle="None", marker="x", ms=8)
-        if total_c_times:
-            axins.plot(total_c_times, total_c_values, label="cadical", linestyle="None", marker="x", ms=8)
-        if total_times:
-            axins.plot(total_times, total_values, label="total", linestyle="--")
+        ax.set_ylim(0, threshold * 1.2)
 
 
+    # # plot individual series
+    # for name, data in vivified.items():
+    #     items = sorted(data.items())
+    #     times = [t for t, v in items]
+    #     values = [v for t, v in items]
+    #
+    #     # plt.plot(times, values, label=name, linestyle="None", marker='x')
+    #     ax.plot(times, values, label=name, linestyle="None", marker='x')
+    #     axins.plot(times, values, label=name, linestyle="None", marker='x')
 
-        axins.set_xlabel("solver time")
-        ax.set_ylabel("value")
-        ax.legend()
-        ax.set_title("vivifications over time")
-        plt.savefig(sys.argv[2] + "vivifications.svg")
+    # plot a total line
 
-    else: 
+    if total_vivi_times:
+        ax.plot(total_vivi_times, total_vivi_values, label="vivify only", linestyle="None", marker="x", ms=8)
+    if total_c_times:
+        ax.plot(total_c_times, total_c_values, label="cadical", linestyle="None", marker="x", ms=8)
+    if total_times:
+        ax.plot(total_times, total_values, label="total vivified", linestyle="--")
+    if total_checked_sorted:
+        ax.plot(total_checked_times, total_checked_values, label="total checked", linestyle="--")
 
-        # # plot individual series
-        # for name, data in vivified.items():
-        #     items = sorted(data.items())
-        #     times = [t for t, v in items]
-        #     values = [v for t, v in items]
-        #
-        #     plt.plot(times, values, label=name, linestyle="None", marker='x')
-        
-        # plot a total line
-        if total_vivi_times: 
-            plt.plot(total_vivi_times, total_vivi_values, label="vivify only", linestyle="None", marker="x", ms=8)
-        if total_c_times:
-            plt.plot(total_c_times, total_c_values, label="cadical", linestyle="None", marker=".", ms=8)
-        if total_times:
-            plt.plot(total_times, total_values, label="total", linestyle="--")
+    if total_vivi_times:
+        axins.plot(total_vivi_times, total_vivi_values, label="vivify only", linestyle="None", marker="x", ms=8)
+    if total_c_times:
+        axins.plot(total_c_times, total_c_values, label="cadical", linestyle="None", marker="x", ms=8)
+    if total_times:
+        axins.plot(total_times, total_values, label="total vivified", linestyle="--")
+    if total_checked_sorted:
+        axins.plot(total_checked_times, total_checked_values, label="total checked", linestyle="--")
 
-        plt.xlabel("solver time")
-        plt.ylabel("number of vivifications")
-        plt.legend()
-        plt.title("vivifications over time")
-        plt.savefig(sys.argv[2] + "vivifications.svg")
 
+    axins.set_xlabel("solver time")
+    plt.ylabel("number of clauses")
+    ax.legend()
+    ax.set_title("vivifications over time")
+    plt.savefig(sys.argv[2] + "vivifications.svg")
+
+    # else: 
+    #
+    #     # # plot individual series
+    #     # for name, data in vivified.items():
+    #     #     items = sorted(data.items())
+    #     #     times = [t for t, v in items]
+    #     #     values = [v for t, v in items]
+    #     #
+    #     #     plt.plot(times, values, label=name, linestyle="None", marker='x')
+    #
+    #     # plot a total line
+    #     if total_vivi_times: 
+    #         plt.plot(total_vivi_times, total_vivi_values, label="vivify only", linestyle="None", marker="x", ms=8)
+    #     if total_c_times:
+    #         plt.plot(total_c_times, total_c_values, label="cadical", linestyle="None", marker=".", ms=8)
+    #     if total_times:
+    #         plt.plot(total_times, total_values, label="total", linestyle="--")
+    #     if total_checked_sorted:
+    #         plt.plot(total_checked_times, total_checked_values, label="checked clauses", linestyle="--")
+    #
+    #     plt.xlabel("solver time")
+    #     plt.ylabel("number of vivifications")
+    #     plt.legend()
+    #     plt.title("vivifications over time")
+    #     plt.savefig(sys.argv[2] + "vivifications.svg")
+    #
 
 
 main()
