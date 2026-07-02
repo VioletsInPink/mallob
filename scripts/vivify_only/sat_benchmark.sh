@@ -82,26 +82,7 @@ if [ -z $1 ]; then
     echo "Usage:"
     echo "Run a benchmark: bash $0 --run path/to/benchmark-file"
     echo "Extract benchmark results: bash $0 --extract path/to/experiments"
-    echo "Stop a running benchmark: bash $0 --stop"
     exit 1
-fi
-
-# Cleanup / killing function
-function cleanup() {
-    killall -9 mpirun 2>/dev/null
-    killall -9 build/mallob 2>/dev/null
-    killall -9 ./build/mallob_sat_process 2>/dev/null
-    rm /dev/shm/*mallob* 2>/dev/null
-}
-
-# Clean up other running experiments
-if [ "$1" == "--stop" ]; then
-    touch STOP_IMMEDIATELY
-    cleanup
-    sleep 3
-    rm STOP_IMMEDIATELY
-    echo "Stopped experiments."
-    exit 0
 fi
 
 # Extract run time results
@@ -249,7 +230,6 @@ for f in $(cat $1) ; do
         mpirun -np $NPROCS --bind-to hwthread --map-by ppr:${NPROCS}:node:pe=$nhwthreadsperproc build/mallob -mono=$f -log=$logdir -sld=$logdir -os $malloboptions 2>&1 > $logdir/OUT
         
         # Clean up
-        cleanup
         # if $downloaded; then
         #     rm -rf "$f"
         # fi
