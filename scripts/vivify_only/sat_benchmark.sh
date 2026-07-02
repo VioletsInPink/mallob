@@ -124,12 +124,6 @@ if [ "$1" == "--extract" ]; then
         # Extract run time and result
         time=$(grep "RESPONSE_TIME" $logfiles | awk '{print $6}' | tail -n1)
 
-        if [ -z "$time" ]; then
-            echo "ERROR: No RESPONSE_TIME found in:"
-            echo "  $logfiles"
-            exit 0
-        fi
-
         # Determine result
         if grep -q "^s SATISFIABLE" $logfiles; then
             result="sat"
