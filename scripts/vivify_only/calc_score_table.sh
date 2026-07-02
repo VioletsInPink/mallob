@@ -10,7 +10,6 @@ OUT_FILE="$2"
 
 # Clean up other running experiments
 if [ "$1" == "--stop" ]; then
-    bash "$BENCHMARK_SCRIPT" --stop
     touch STOP_IMMEDIATELY
     sleep 3
     rm STOP_IMMEDIATELY
