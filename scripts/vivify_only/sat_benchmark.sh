@@ -128,17 +128,17 @@ if [ "$1" == "--extract" ]; then
         if grep -q "^s SATISFIABLE" $logfiles; then
             result="sat"
             nsat=$((nsat+1))
-            par2sum=$(echo "$par2sum + $time" | bc -l)
+            par2sum=$(awk "BEGIN {print $par2sum + $time}")
 
         elif grep -q "^s UNSATISFIABLE" $logfiles; then
             result="unsat"
             nunsat=$((nunsat+1))
-            par2sum=$(echo "$par2sum + $time" | bc -l)
+            par2sum=$(awk "BEGIN {print $par2sum + $time}")
 
         else
             result="unknown"
             time="$timeout"
-            par2sum=$(echo "$par2sum + 2*$timeout" | bc -l)
+            par2sum=$(awk "BEGIN {print $par2sum + 2*$timeout}")
         fi
         
         # Write run time and result to files
@@ -162,9 +162,8 @@ if [ "$1" == "--extract" ]; then
     mv $1/qualified-runtimes.txt $1/qualified-runtimes-and-results.txt
     
     echo "Experiments on $((i-1)) instances found."
-    echo "$((nsat+nunsat)) solved ($nsat sat, $nunsat unsat), PAR-2 score: $(echo "$par2sum / (${i}-1)"|bc -l)"
-
-    echo "$((nsat+nunsat)) $nsat $nunsat $(echo "$par2sum / (${i}-1)"|bc -l)" >> $1/table_entry.txt
+    echo "$((nsat+nunsat)) solved ($nsat sat, $nunsat unsat), PAR-2 score: $(awk -v s="$par2sum" -v i="$i" 'BEGIN {print s / (i-1)}')"
+    echo "$((nsat+nunsat)) solved ($nsat sat, $nunsat unsat), PAR-2 score: $(awk -v s="$par2sum" -v i="$i" 'BEGIN {print s / (i-1)}')" >> $1/table_entry.txt
     exit 0
 fi
 
