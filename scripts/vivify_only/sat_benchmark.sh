@@ -227,7 +227,7 @@ for f in $(cat $1) ; do
         mkdir -p $logdir
         
         # Run Mallob
-        mpirun -np $NPROCS --bind-to hwthread --map-by ppr:${NPROCS}:node:pe=$nhwthreadsperproc build/mallob -mono=$f -log=$logdir -sld=$logdir -os $malloboptions 2>&1 > $logdir/OUT
+        mpirun -np $NPROCS --bind-to hwthread --map-by ppr:${NPROCS}:node:pe=$nhwthreadsperproc build/mallob -mono=$file -log=$logdir -sld=$logdir -os $malloboptions 2>&1 > $logdir/OUT
         
         # Clean up
         # if $downloaded; then
