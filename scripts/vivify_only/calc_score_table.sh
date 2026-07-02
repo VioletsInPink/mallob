@@ -8,6 +8,16 @@ BENCHMARK_SCRIPT="./scripts/vivify_only/sat_benchmark.sh"
 BENCHMARK_FILE="$1"
 OUT_FILE="$2"
 
+# Clean up other running experiments
+if [ "$1" == "--stop" ]; then
+    bash "$BENCHMARK_SCRIPT" --stop
+    touch STOP_IMMEDIATELY
+    sleep 3
+    rm STOP_IMMEDIATELY
+    echo "Stopped experiments."
+    exit 0
+fi
+
 mkdir "$OUT_FILE/results"
 
 if [[ -z "${BENCHMARK_FILE:-}" ]]; then
@@ -84,9 +94,21 @@ for entry in "${CONFIGS[@]}"; do
 
     bash "$BENCHMARK_SCRIPT" --run "$BENCHMARK_FILE"
 
+    if [ -f STOP_IMMEDIATELY ]; then
+        # Signal to stop
+        echo "Stopping because STOP_IMMEDIATELY is present"
+        exit
+    fi
+
     echo
     echo "Extracting statistics for $solver ..."
     bash "$BENCHMARK_SCRIPT" --extract "${OUT_FILE}/results/${solver}"
+
+    if [ -f STOP_IMMEDIATELY ]; then
+        # Signal to stop
+        echo "Stopping because STOP_IMMEDIATELY is present"
+        exit
+    fi
 
     echo "${solver} $(cat "${OUT_FILE}/results/${solver}/table_entry.txt")" >> "${OUT_FILE}/results/summary_table.txt"
 done
