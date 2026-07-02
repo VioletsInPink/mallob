@@ -142,7 +142,7 @@ Cadical::Cadical(const SolverSetup& setup)
 	}
 	
   if (_setup.solverType == 'v') {
-    LOGGER(_logger, V4_VVER, "vivification only -- thread: %d / %d\n", setup.vivifyIndex + 1, setup.vivifyCount);
+    LOGGER(_logger, V3_VERB, "vivification only -- thread: %d / %d\n", setup.vivifyIndex + 1, setup.vivifyCount);
 		okay &= solver->set("vivifyonlyid", setup.vivifyIndex); // set this as the n'th solver of this type
 		okay &= solver->set("vivifyonlycount", setup.vivifyCount); // set # instances of this type of cadical
 		assert(okay);
