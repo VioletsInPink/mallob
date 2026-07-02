@@ -145,12 +145,6 @@ if [ "$1" == "--extract" ]; then
         echo "$i $time $result $total_threads" >> $1/qualified-runtimes.txt
         echo "$i $time" >> $1/qualified-runtimes-$result.txt
         
-        python scripts/vivify_only/plot_vivi_clause_size_over_time.py \
-        $dir "${dir}/"
-
-        python scripts/vivify_only/plot_vivifies_total_over_time.py \
-        $dir "${dir}/"
-
         i=$((i+1))
     done
     

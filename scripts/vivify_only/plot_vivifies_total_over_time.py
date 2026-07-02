@@ -185,7 +185,7 @@ def main():
     plt.ylabel("number of clauses")
     ax.legend()
     ax.set_title("vivifications over time")
-    plt.savefig(sys.argv[2] + "vivifications.svg")
+    plt.savefig(sys.argv[2] + "/vivifications_" + sys.argv[3] + ".svg")
 
     # else: 
     #

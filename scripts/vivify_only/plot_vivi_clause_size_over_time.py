@@ -95,7 +95,7 @@ def main():
     plt.ylabel("Clause length")
     plt.legend()
     plt.title("Length of vivified clauses over time")
-    plt.savefig(sys.argv[2] + "clause_length_over_time.svg")
+    plt.savefig(sys.argv[2] + "/clause_length_over_time_" + sys.argv[3] + ".svg")
     plt.clf()
 
 
@@ -112,7 +112,7 @@ def main():
     plt.xlabel("clause length")
     plt.ylabel("occurence count")
     plt.title("Occurences of Clause length in vivified clauses")
-    plt.savefig(sys.argv[2] + "clause_length_distribution.svg")
+    plt.savefig(sys.argv[2] + "/clause_length_distribution_" + sys.argv[3] + ".svg")
 
 main()
 
