@@ -163,7 +163,7 @@ if [ "$1" == "--extract" ]; then
     
     echo "Experiments on $((i-1)) instances found."
     echo "$((nsat+nunsat)) solved ($nsat sat, $nunsat unsat), PAR-2 score: $(awk -v s="$par2sum" -v i="$i" 'BEGIN {print s / (i-1)}')"
-    echo "$((nsat+nunsat)) solved ($nsat sat, $nunsat unsat), PAR-2 score: $(awk -v s="$par2sum" -v i="$i" 'BEGIN {print s / (i-1)}')" >> $1/table_entry.txt
+    echo "$((nsat+nunsat)) $nsat $nunsat $(awk -v s="$par2sum" -v i="$i" 'BEGIN {print s / (i-1)}')" >> $1/table_entry.txt
     exit 0
 fi
 
