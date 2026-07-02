@@ -2,8 +2,7 @@
 set -euo pipefail
 
 # Path to the benchmark script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BENCHMARK_SCRIPT="$SCRIPT_DIR/sat_benchmark.sh"
+BENCHMARK_SCRIPT="./scripts/vivify_only/sat_benchmark.sh"
 
 # Benchmark file (one CNF per line)
 BENCHMARK_FILE="$1"
