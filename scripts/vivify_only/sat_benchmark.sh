@@ -194,7 +194,28 @@ for f in $(cat $1) ; do
             # downloaded=false
             echo "Cannot find file for hash \"$hash\" - trying to download from benchmark-database"
             # downloaded=true
-            while ! wget -q --content-disposition -P "$download_dir" https://benchmark-database.de/file/$hash ; do sleep 1; done
+    
+            max_retries=3
+            retries=0
+            downloaded=false
+
+            while [ $retries -lt $max_retries ]; do
+                if wget -q --content-disposition -P "$download_dir" "https://benchmark-database.de/file/$hash"; then
+                    downloaded=true
+                    break
+                fi
+                retries=$((retries + 1))
+                echo "Download failed (attempt $retries/$max_retries), retrying in 5s..."
+                sleep 5
+            done
+            
+            if [ "$downloaded" = false ]; then
+                echo "ERROR: Failed to download hash $hash after $max_retries attempts"
+                echo "[]: skip this instance"
+                i=$((i+1))
+                # Option 2: Exit entirely
+                # exit 1
+            fi
 
 
             matches=( "$download_dir"/"${hash}"* )
@@ -202,7 +223,8 @@ for f in $(cat $1) ; do
                 file="${matches[0]}"
             else
                 echo "ERROR: download succeeded but no file matching $hash was found in $download_dir"
-                exit 1
+                echo "[]: skip this instance"
+                i=$((i+1))
             fi
         fi
 

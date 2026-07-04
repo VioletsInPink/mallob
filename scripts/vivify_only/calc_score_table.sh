@@ -17,7 +17,7 @@ if [ "$1" == "--stop" ]; then
     exit 0
 fi
 
-mkdir "$OUT_FILE/results"
+mkdir -p "$OUT_FILE/results"
 
 if [[ -z "${BENCHMARK_FILE:-}" ]]; then
     echo "Usage: $0 benchmark-file"
