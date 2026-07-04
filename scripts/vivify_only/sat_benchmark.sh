@@ -32,7 +32,7 @@
 
 # 8 for normal utilization, keeping hardware threads idle
 # 4 for full utilization, spawning a solver at each hardware thread
-nhwthreadsperproc=8
+nhwthreadsperproc=4
 
 # Some environment variables for Mallob
 RDMAV_FORK_SAFE=1

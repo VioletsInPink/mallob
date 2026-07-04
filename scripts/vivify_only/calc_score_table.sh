@@ -41,6 +41,8 @@ CONFIGS=(
 "CaDiCaL_v4|(v){4}(c)*|0"
 "CaDiCaL_v5|(v){5}(c)*|0"
 "CaDiCaL_v6|(v){6}(c)*|0"
+"CaDiCaL+_v2|(v){2}(c)*|1"
+"CaDiCaL+_v3|(v){3}(c)*|1"
 )
 
 TIMEOUT=300
