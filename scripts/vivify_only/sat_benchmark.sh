@@ -232,8 +232,12 @@ for f in $(cat $1) ; do
         echo "$i : $file"
         
         logdir="${sublogdir}/$i"
-        rm -rf $logdir 2>/dev/null
-        mkdir -p $logdir
+        if [ -d "$logdir" ]; then
+            echo "Skipping instance $i: $logdir already exists"
+            i=$((i+1))
+            continue
+        fi
+        mkdir -p "$logdir"
         
         # Run Mallob
         mpirun -np $NPROCS --bind-to hwthread --map-by ppr:${NPROCS}:node:pe=$nhwthreadsperproc build/mallob -mono=$file -log=$logdir -spd=$logdir -spl=4 -sld=$logdir -os $malloboptions 2>&1 > $logdir/OUT
