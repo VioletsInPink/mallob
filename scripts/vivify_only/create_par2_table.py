@@ -1,11 +1,12 @@
 import matplotlib.pyplot as plt
 import matplotlib
+import sys
 
 matplotlib.use("Agg")
 
-INPUT_FILE = "results/summary_table.txt"
-OUT_TEX = "results/table.tex"
-OUT_SVG = "results/plot.svg"
+INPUT_FILE = sys.argv[1] + "/summary_table.txt"
+OUT_TEX = sys.argv[2] + "/table.tex"
+OUT_SVG = sys.argv[2] + "/plot.svg"
 
 data = []
 
@@ -24,7 +25,7 @@ with open(INPUT_FILE, "r") as f:
         unsat = int(parts[3])
         par2 = float(parts[4])
 
-        data.append((solver, sat, unsat, solved, par2))
+        data.append((solver, solved, sat, unsat, par2))
 
 # sort by PAR2 (lower is better)
 data.sort(key=lambda x: x[4])
@@ -38,8 +39,8 @@ latex.append("\\hline")
 latex.append("Solver & SAT & UNSAT & Solved & PAR2 \\\\")
 latex.append("\\hline")
 
-for solver, sat, unsat, solved, par2 in data:
-    latex.append(f"{solver} & {sat} & {unsat} & {solved} & {par2:.2f} \\\\")
+for solver, solved, sat, unsat, par2 in data:
+    latex.append(f"{solver} & {solved} & {sat} & {unsat} & {par2:.2f} \\\\")
 
 latex.append("\\hline")
 latex.append("\\end{tabular}")
@@ -58,16 +59,11 @@ plt.axis("off")
 
 table_data = [["Solver", "solved", "sat", "unsat", "PAR2"]]
 table_data += [[s, str(sol), str(sat), str(usat), f"{p:.2f}"]
-               for s, sol, sat, usat, p in data]
+               for s, sol, sat, usat, p in sorted(data)]
 
-plt.table(cellText=table_data, loc="center")
+plt.table(cellText=table_data, loc="center", cellLoc="left")
 
-plt.savefig("results/plot_with_table.svg")
-
-plt.xticks(rotation=45, ha="right")
 plt.title("Mallob / CaDiCaL Config Comparison")
-plt.legend()
-
 plt.tight_layout()
 plt.savefig(OUT_SVG, format="svg")
 
