@@ -37,17 +37,17 @@ for file in "${FILES[@]}"; do
 
     # define output name for plotting
     if [ "$vivi" -eq 1 ]; then
-      OUTNAME="../../Bachelorarbeit: Obsidian Vault/${file}_withCadical_"
+      OUTNAME="${file}_withCadical"
     else
-      OUTNAME="../../Bachelorarbeit: Obsidian Vault/${file}_"
+      OUTNAME="${file}"
     fi
 
     # run plotting script
     python scripts/vivify_only/plot_vivi_clause_size_over_time.py \
-      log "${OUTNAME}"
+      log "../../Bachelorarbeit: Obsidian Vault" "${OUTNAME}"
 
     python scripts/vivify_only/plot_vivifies_total_over_time.py \
-      log "${OUTNAME}"
+      log "../../Bachelorarbeit: Obsidian Vault" "${OUTNAME}"
 
   done
 done
