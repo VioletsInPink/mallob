@@ -91,7 +91,16 @@ for entry in "${CONFIGS[@]}"; do
     export vivify=$vivify
     export download_dir="${OUT_FILE}/downloads"
 
+    mkdir -p $sublogdir
+
     bash "$BENCHMARK_SCRIPT" --run "$BENCHMARK_FILE"
+    RETCODE=$?
+
+    if [ $RETCODE -eq 1 ]; then
+        echo "WARNING: script failed"
+        echo "stopping after critical error"
+        exit 1
+    fi 
 
     if [ -f STOP_IMMEDIATELY ]; then
         # Signal to stop

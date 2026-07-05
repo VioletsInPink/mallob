@@ -237,13 +237,32 @@ for f in $(cat $1) ; do
             i=$((i+1))
             continue
         fi
-        mkdir "$logdir"
         
+        if ! mkdir "$logdir"; then
+            echo "ERROR: Failed to create $logdir"
+            exit 1
+        fi
+
         # Run Mallob
         echo "$(date +%T) start mallob"
         time \
-        mpirun -np $NPROCS --bind-to hwthread --map-by ppr:${NPROCS}:node:pe=$nhwthreadsperproc build/mallob -mono=$file -log=$logdir -spd=$logdir -spl=4 -sld=$logdir -os $malloboptions 2>&1 > $logdir/OUT
+        timeout -s TERM $(($timeout + 60)) \
+        mpirun -np "$NPROCS" --bind-to hwthread --map-by "ppr:${NPROCS}:node:pe=${nhwthreadsperproc}" build/mallob -mono="$file" -log="$logdir" -spd="$logdir" -spl=4 -sld="$logdir" -os "$malloboptions" 2>&1 > "${logdir}/OUT"
+        RETCODE=$?
         echo "$(date +%T) end mallob"    
+
+        if [ $RETCODE -eq 124 ]; then
+            echo "CRITICAL ERROR: Mallob exceeded 6-minute timeout"
+            exit 1
+        elif [ $RETCODE -eq 127 ]; then
+            echo "CRITICAL ERROR: Command not found"
+            rm -r "$logdir"
+            exit 1
+        elif [ $RETCODE -eq 2 ]; then 
+            echo "CRITICAL ERROR: no such file or directory"
+            rm -r "$logdir"
+            exit 1
+        fi
 
         # Clean up
         # if $downloaded; then
