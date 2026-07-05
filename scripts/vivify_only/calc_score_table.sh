@@ -46,7 +46,6 @@ CONFIGS=(
 )
 
 TIMEOUT=300
-CBDF=1.0
 
 {
   echo "=== DATE ==="
@@ -88,7 +87,6 @@ for entry in "${CONFIGS[@]}"; do
 
     export portfolio="$portfolio"
     export timeout="$TIMEOUT"
-    export CBDF="$CBDF"
     export sublogdir="${OUT_FILE}/results/${solver}"
     export vivify=$vivify
     export download_dir="${OUT_FILE}/downloads"
