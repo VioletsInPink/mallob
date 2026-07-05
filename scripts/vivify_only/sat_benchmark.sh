@@ -71,9 +71,12 @@ startinstance=1
 : "${sublogdir:?sublogdir missing}"
 : "${download_dir:?download_dir missing}"
 
-# TODO Add further options to these arguments Mallob is called with.
-malloboptions="-t=$THREADS_PER_PROC -jwl=$timeout -T=$(($timeout + 15)) -v=3 -sleep=1000 -trace-dir=. -pipe-large-solutions=0 -processes-per-host=$NPROCS -regular-process-allocation -max-lits-per-thread=50000000 -strict-clause-length-limit=20 -clause-filter-clear-interval=500 -max-lbd-partition-size=2 -export-chunks=20 -satsolver=$portfolio -vivi=$vivify"
 
+max_timout="$(($timeout + 15))"
+
+# TODO Add further options to these arguments Mallob is called with.
+malloboptions="-t=$THREADS_PER_PROC -jwl=$timeout -T=$max_timout -v=3 -sleep=1000 -trace-dir=. -pipe-large-solutions=0 -processes-per-host=$NPROCS -regular-process-allocation -max-lits-per-thread=50000000 -strict-clause-length-limit=20 -clause-filter-clear-interval=500 -max-lbd-partition-size=2 -export-chunks=20 -satsolver=$portfolio -vivi=$vivify"
+echo $malloboptions
 #####################################################################
 
 
@@ -247,7 +250,7 @@ for f in $(cat $1) ; do
         echo "$(date +%T) start mallob"
         time \
         timeout -s TERM $(($timeout + 60)) \
-        mpirun -np "$NPROCS" --bind-to hwthread --map-by "ppr:${NPROCS}:node:pe=${nhwthreadsperproc}" build/mallob -mono="$file" -log="$logdir" -spd="$logdir" -spl=4 -sld="$logdir" -os "$malloboptions" 2>&1 > "${logdir}/OUT"
+        mpirun -np "$NPROCS" --bind-to hwthread --map-by "ppr:${NPROCS}:node:pe=${nhwthreadsperproc}" build/mallob -mono="$file" -log="$logdir" -spd="$logdir" -spl=4 -sld="$logdir" -os $malloboptions 2>&1 > "${logdir}/OUT"
         RETCODE=$?
         echo "$(date +%T) end mallob"    
 
