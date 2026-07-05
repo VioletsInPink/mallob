@@ -180,6 +180,7 @@ for f in $(cat $1) ; do
 
         # Skip any instances that should be skipped
         if [ $i -lt $startinstance ]; then 
+                echo "skip cause below start instance"
                 i=$((i+1))
                 continue 
         fi
@@ -237,11 +238,14 @@ for f in $(cat $1) ; do
             i=$((i+1))
             continue
         fi
-        mkdir -p "$logdir"
+        mkdir "$logdir"
         
         # Run Mallob
+        echo "$(date +%T) start mallob"
+        time \
         mpirun -np $NPROCS --bind-to hwthread --map-by ppr:${NPROCS}:node:pe=$nhwthreadsperproc build/mallob -mono=$file -log=$logdir -spd=$logdir -spl=4 -sld=$logdir -os $malloboptions 2>&1 > $logdir/OUT
-        
+        echo "$(date +%T) end mallob"    
+
         # Clean up
         # if $downloaded; then
         #     rm -rf "$f"
@@ -249,6 +253,5 @@ for f in $(cat $1) ; do
         sleep 1
 
         i=$((i+1))
-        echo ""
 done
  
