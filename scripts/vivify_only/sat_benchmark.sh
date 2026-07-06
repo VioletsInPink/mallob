@@ -97,7 +97,7 @@ if [ "$1" == "--extract" ]; then
         exit 1
     fi
 
-    if [ -f qualified-runtimes-and-results.txt ]; then
+    if [ -f "$1/qualified-runtimes-and-results.txt" ]; then
         echo "results exist"
         exit 0
     fi
