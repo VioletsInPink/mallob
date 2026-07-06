@@ -131,6 +131,11 @@ if [ "$1" == "--extract" ]; then
         # Extract run time and result
         time=$(grep "RESPONSE_TIME" $logfiles | awk '{print $6}' | tail -n1)
 
+        if [[ -z "$time" ]]; then
+            echo "No RESPONSE_TIME found fallback is 0"
+            time=0
+        else
+
         # Determine result
         if grep -q "^s SATISFIABLE" $logfiles; then
             result="sat"
