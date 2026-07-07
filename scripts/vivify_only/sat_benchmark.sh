@@ -134,7 +134,7 @@ if [ "$1" == "--extract" ]; then
         if [[ -z "$time" ]]; then
             echo "No RESPONSE_TIME found fallback is 0"
             time=0
-        else
+        fi
 
         # Determine result
         if grep -q "^s SATISFIABLE" $logfiles; then
