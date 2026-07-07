@@ -7,7 +7,7 @@ BENCHMARK_SCRIPT="./scripts/vivify_only/sat_benchmark.sh"
 # Benchmark file (one CNF per line)
 BENCHMARK_FILE="$1"
 OUT_FILE="$2"
-SKIP="$3"
+SKIP="${3:-}"
 
 # Clean up other running experiments
 if [ "$1" == "--stop" ]; then
