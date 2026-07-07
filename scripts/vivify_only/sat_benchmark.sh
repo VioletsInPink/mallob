@@ -87,6 +87,26 @@ if [ -z $1 ]; then
     exit 1
 fi
 
+if [ "$1" = "--clean" ]; then
+    shift
+
+    if [ -z "$1" ]; then
+        echo "Provide a results directory."
+        exit 1
+    fi
+
+    RESULTS_DIR="$1"
+
+    echo "clean"
+
+    rm -f $1/qualified-runtimes*
+    rm -f $1/cdf-runtimes*
+    rm -f $1/sorted-runtimes*
+    rm -f $1/table_entry.txt
+
+    exit 0
+fi
+
 # Extract run time results
 if [ "$1" == "--extract" ]; then
 
@@ -132,8 +152,16 @@ if [ "$1" == "--extract" ]; then
         time=$(grep "RESPONSE_TIME" $logfiles | awk '{print $6}' | tail -n1)
 
         if [[ -z "$time" ]]; then
-            echo "No RESPONSE_TIME found fallback is 0"
-            time=0
+            echo "No RESPONSE_TIME found"
+
+            if grep "WALLCLOCK TIMEOUT: aborting" $logfiles; then
+                echo "timeout using t = $timeout"
+                time=$timeout
+            else
+                echo "ERROR aborting"
+                exit 1
+                time=0
+            fi
         fi
 
         # Determine result
