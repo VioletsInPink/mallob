@@ -75,7 +75,7 @@ startinstance=1
 max_timout="$(($timeout + 15))"
 
 # TODO Add further options to these arguments Mallob is called with.
-malloboptions="-t=$THREADS_PER_PROC -jwl=$timeout -T=$max_timout -v=3 -sleep=1000 -trace-dir=. -pipe-large-solutions=0 -processes-per-host=$NPROCS -regular-process-allocation -strict-clause-length-limit=20 -clause-filter-clear-interval=500 -max-lbd-partition-size=2 -export-chunks=20 -satsolver=$portfolio -vivi=$vivify"
+malloboptions="-t=$THREADS_PER_PROC -jwl=$timeout -T=$max_timout -v=3 -sleep=1000 -trace-dir=. -pipe-large-solutions=0 -processes-per-host=$NPROCS -regular-process-allocation -strict-clause-length-limit=20 -clause-filter-clear-interval=500 -max-lits-per-thread=50000000 -max-lbd-partition-size=2 -export-chunks=20 -satsolver=$portfolio -vivi=$vivify"
 # echo $malloboptions
 #####################################################################
 
