@@ -152,14 +152,10 @@ if [ "$1" == "--extract" ]; then
         time=$(grep "RESPONSE_TIME" $logfiles | awk '{print $6}' | tail -n1)
 
         if [[ -z "$time" ]]; then
-            echo "No RESPONSE_TIME found"
-
-            if grep -q "WALLCLOCK TIMEOUT: aborting" $logfiles; then
-                echo "timeout using t = $timeout"
-            else
-                echo "ERROR fallback to t = $timeout"
-                time=$timeout
+            if [[ -n grep -q "WALLCLOCK TIMEOUT: aborting" $logfiles ]]; then
+                echo "ERROR no timeout fallback to t = $timeout"
             fi
+            time=$timeout
         fi
 
         # Determine result
