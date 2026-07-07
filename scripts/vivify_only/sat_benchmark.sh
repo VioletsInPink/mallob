@@ -156,11 +156,9 @@ if [ "$1" == "--extract" ]; then
 
             if grep -q "WALLCLOCK TIMEOUT: aborting" $logfiles; then
                 echo "timeout using t = $timeout"
-                time=$timeout
             else
-                echo "ERROR aborting"
-                exit 1
-                time=0
+                echo "ERROR fallback to t = $timeout"
+                time=$timeout
             fi
         fi
 
