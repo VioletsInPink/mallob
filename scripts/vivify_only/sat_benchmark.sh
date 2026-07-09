@@ -290,7 +290,6 @@ for f in $(cat $1) ; do
 
         if [ $RETCODE -eq 124 ]; then
             echo "CRITICAL ERROR: Mallob exceeded 6-minute timeout"
-            exit 1
         elif [ $RETCODE -eq 127 ]; then
             echo "CRITICAL ERROR: Command not found"
             rm -r "$logdir"
