@@ -146,7 +146,6 @@ if [ "$1" == "--extract" ]; then
         # Log files to parse
         dir="$1/$i"
         logfiles=$(echo $dir/*/log.*)
-        echo $dir
         
         # Extract run time and result
         time=$(grep "RESPONSE_TIME" $logfiles | awk '{print $6}' | tail -n1)
@@ -163,6 +162,7 @@ if [ "$1" == "--extract" ]; then
         # Determine result
         if grep -q "^s SATISFIABLE" $logfiles; then
             if [[ $time_valid == false ]]; then
+                echo $dir
                 echo "ERROR found solution but no response time fallback to t = 0"
             fi
             result="sat"
@@ -171,6 +171,7 @@ if [ "$1" == "--extract" ]; then
 
         elif grep -q "^s UNSATISFIABLE" $logfiles; then
             if [[ $time_valid == false ]]; then
+                echo $dir
                 echo "ERROR found solution but no response time fallback to t = 0"
             fi
             result="unsat"
@@ -179,6 +180,7 @@ if [ "$1" == "--extract" ]; then
 
         else
             if [[ $time_valid == false ]]; then
+                echo $dir
                 echo "ERROR found no solution and no response time fallback to t = $timeout"
             fi
             result="unknown"
