@@ -162,7 +162,7 @@ if [ "$1" == "--extract" ]; then
 
         # Determine result
         if grep -q "^s SATISFIABLE" $logfiles; then
-            if [[ $time_validy == false ]]; then
+            if [[ $time_valid == false ]]; then
                 echo "ERROR found solution but no response time fallback to t = 0"
             fi
             result="sat"
@@ -170,7 +170,7 @@ if [ "$1" == "--extract" ]; then
             par2sum=$(awk "BEGIN {print $par2sum + $time}")
 
         elif grep -q "^s UNSATISFIABLE" $logfiles; then
-            if [[ $time_validy == false ]]; then
+            if [[ $time_valid == false ]]; then
                 echo "ERROR found solution but no response time fallback to t = 0"
             fi
             result="unsat"
@@ -178,7 +178,7 @@ if [ "$1" == "--extract" ]; then
             par2sum=$(awk "BEGIN {print $par2sum + $time}")
 
         else
-            if [[ $time_validy == false ]]; then
+            if [[ $time_valid == false ]]; then
                 echo "ERROR found no solution and no response time fallback to t = $timeout"
             fi
             result="unknown"
