@@ -150,28 +150,37 @@ if [ "$1" == "--extract" ]; then
         
         # Extract run time and result
         time=$(grep "RESPONSE_TIME" $logfiles | awk '{print $6}' | tail -n1)
-
+        time_valid=true
         if [[ -z "$time" ]]; then
             if grep -q "WALLCLOCK TIMEOUT: aborting" $logfiles; then
                 time=$timeout
             else
-                echo "ERROR no timeout fallback to t = 0 if found t = 300 else"
                 time=0
+                time_valid=false
             fi
         fi
 
         # Determine result
         if grep -q "^s SATISFIABLE" $logfiles; then
+            if [[ $time_validy == false ]]; then
+                echo "ERROR found solution but no response time fallback to t = 0"
+            fi
             result="sat"
             nsat=$((nsat+1))
             par2sum=$(awk "BEGIN {print $par2sum + $time}")
 
         elif grep -q "^s UNSATISFIABLE" $logfiles; then
+            if [[ $time_validy == false ]]; then
+                echo "ERROR found solution but no response time fallback to t = 0"
+            fi
             result="unsat"
             nunsat=$((nunsat+1))
             par2sum=$(awk "BEGIN {print $par2sum + $time}")
 
         else
+            if [[ $time_validy == false ]]; then
+                echo "ERROR found no solution and no response time fallback to t = $timeout"
+            fi
             result="unknown"
             time="$timeout"
             par2sum=$(awk "BEGIN {print $par2sum + 2*$timeout}")
