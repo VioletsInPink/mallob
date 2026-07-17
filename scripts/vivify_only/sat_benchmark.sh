@@ -18,9 +18,9 @@ PATH="build:$PATH"
 : "${sublogdir:?sublogdir missing}"
 : "${download_dir:?download_dir missing}"
 
-max_timout="$(($timeout + 15))"
+max_timeout="$(($timeout + 15))"
 
-malloboptions="-watchdog=0 -t=$THREADS_PER_PROC -jwl=$timeout -T=$max_timout -v=3 -trace-dir=../trace -processes-per-host=$NPROCS -satsolver=$portfolio -vivi=$vivify"
+malloboptions="-watchdog=0 -t=$THREADS_PER_PROC -jwl=$timeout -T=$max_timeout -v=3 -trace-dir=../trace -processes-per-host=$NPROCS -satsolver=$portfolio -vivi=$vivify"
 #####################################################################
 
 if [ -z $1 ]; then
@@ -113,7 +113,7 @@ for f in $(cat $1) ; do
         echo "$(date +%T) start mallob"
         time \
         timeout -s TERM $(($timeout + 60)) \
-        mpirun -np "$NPROCS" --bind-to hwthread --map-by "ppr:${NPROCS}:node:pe=${nhwthreadsperproc}" build/mallob -mono="$file" -log="$logdir" -spd="$logdir" -spl=4 -sld="$logdir" -os $malloboptions 2>&1 > "${logdir}/OUT"
+        mpirun -np "$NPROCS" --bind-to hwthread --map-by "ppr:${NPROCS}:node:pe=${THREADS_PER_PROC}" build/mallob -mono="$file" -log="$logdir" -spd="$logdir" -spl=4 -sld="$logdir" -os $malloboptions 2>&1 > "${logdir}/OUT"
         RETCODE=$?
         echo "$(date +%T) end mallob"    
 
