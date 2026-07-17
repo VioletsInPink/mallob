@@ -207,10 +207,12 @@ void Cadical::diversify(int seed) {
     okay &= solver->set("probing", 0);
     // in the current implementation subsume () in CaDiCal will always be true.
     // therefore the following is not needed and decide() wont be entered.
-    // reordering Internal::cdcl_loop_with_inprocessing () in cadical will break this; 
-    // okay &= solver->set("elim", 0);
-    // okay &= solver->set("compact", 0);
-    // okay &= solver->set("comdition", 0);
+    okay &= solver->set("elim", 0);
+    okay &= solver->set("compact", 0);
+    okay &= solver->set("comdition", 0);
+
+ 		// increase the min efficiency. So vivification is more effective
+		okay &= solver->set("vivifymineff", 2e6);
     
     // we skip the flavour, as this should be independent
     assert(okay);
