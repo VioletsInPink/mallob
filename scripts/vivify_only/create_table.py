@@ -6,7 +6,8 @@ matplotlib.use("Agg")
 
 INPUT_FILE = sys.argv[1] + "/summary_table.txt"
 OUT_TEX = sys.argv[2] + "/table.tex"
-OUT_SVG = sys.argv[2] + "/plot.svg"
+OUT_SVG = sys.argv[2] + "/table.svg"
+OUT_MD = sys.argv[2] + "/table.md"
 
 data = []
 
@@ -16,19 +17,27 @@ data = []
 with open(INPUT_FILE, "r") as f:
     for line in f:
         parts = line.strip().split()
-        if len(parts) < 4:
-            continue
-
-        solver = parts[0]
-        solved = int(parts[1])
-        sat = int(parts[2])
-        unsat = int(parts[3])
-        par2 = float(parts[4])
-
-        data.append((solver, solved, sat, unsat, par2))
+        data.append(parts)
 
 # sort by PAR2 (lower is better)
-data.sort(key=lambda x: x[4])
+# data.sort(key=lambda x: x[4])
+
+# -------------------------
+# MARKDOWN TABLE
+# -------------------------
+md = []
+md.append("| " + " | ".join(map(str, data[0])) + " |")
+md.append("| " + " | ".join(["---"] * len(data[0])) + " |")
+
+for row in data[1:]:
+    md.append(f"| " + " | ".join(map(str, row)) + " |")
+
+
+with open(OUT_MD, "w") as f:
+    f.write("\n".join(md))
+
+print(f"Wrote Markdown table to {OUT_MD}")
+
 
 # -------------------------
 # LATEX TABLE
@@ -36,11 +45,11 @@ data.sort(key=lambda x: x[4])
 latex = []
 latex.append("\\begin{tabular}{lrrrrr}")
 latex.append("\\hline")
-latex.append("Solver & SAT & UNSAT & Solved & PAR2 \\\\")
+latex.append(" & ".join(map(str, data[0])) + "\\\\")
 latex.append("\\hline")
 
-for solver, solved, sat, unsat, par2 in data:
-    latex.append(f"{solver} & {solved} & {sat} & {unsat} & {par2:.2f} \\\\")
+for row in data[1:]:
+    latex.append(" & ".join(map(str, row)) + "\\\\")
 
 latex.append("\\hline")
 latex.append("\\end{tabular}")
@@ -57,9 +66,8 @@ plt.figure()
 
 plt.axis("off")
 
-table_data = [["Solver", "solved", "sat", "unsat", "PAR2"]]
-table_data += [[s, str(sol), str(sat), str(usat), f"{p:.2f}"]
-               for s, sol, sat, usat, p in sorted(data)]
+table_data = [data[0]]
+table_data = data[1:]
 
 plt.table(cellText=table_data, loc="center", cellLoc="left")
 

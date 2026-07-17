@@ -7,7 +7,6 @@ BENCHMARK_SCRIPT="./scripts/vivify_only/sat_benchmark.sh"
 # Benchmark file (one CNF per line)
 BENCHMARK_FILE="$1"
 OUT_FILE="$2"
-SKIP="${3:-}"
 
 # Clean up other running experiments
 if [ "$1" == "--stop" ]; then
@@ -28,13 +27,6 @@ fi
 if [[ -z "${OUT_FILE:-}" ]]; then
     echo "Usage: $0 $1 OUT_FILE"
     exit 1
-fi
-
-if [[ -n "$SKIP" && "$SKIP" != "--skip" ]]; then
-    if [[ "$SKIP" != "--clean" ]]; then 
-        echo "Usage: args [--skip] to skip running cadical"
-        exit 1
-    fi
 fi
 
 # Solver configurations to evaluate
@@ -99,42 +91,16 @@ for entry in "${CONFIGS[@]}"; do
     export vivify=$vivify
     export download_dir="${OUT_FILE}/downloads"
 
-    if [[ "$SKIP" != "--skip" && "$SKIP" != "--clean" ]]; then 
-        mkdir -p $sublogdir
+    mkdir -p $sublogdir
 
-        bash "$BENCHMARK_SCRIPT" --run "$BENCHMARK_FILE"
-        RETCODE=$?
+    bash "$BENCHMARK_SCRIPT" --run "$BENCHMARK_FILE"
+    RETCODE=$?
 
-        if [ $RETCODE -eq 1 ]; then
-            echo "WARNING: script failed"
-            echo "stopping after critical error"
-            exit 1
-        fi 
-    else
-        echo "exec Skip"
-    fi
-
-    if [ -f STOP_IMMEDIATELY ]; then
-        # Signal to stop
-        echo "Stopping because STOP_IMMEDIATELY is present"
-        exit
-    fi
-
-    if [[ "$SKIP" == "--clean" ]]; then 
-        bash "$BENCHMARK_SCRIPT" --clean "${OUT_FILE}/results/${solver}"
-    fi
-
-    echo
-    echo "Extracting statistics for $solver ..."
-    bash "$BENCHMARK_SCRIPT" --extract "${OUT_FILE}/results/${solver}"
-
-    if [ -f STOP_IMMEDIATELY ]; then
-        # Signal to stop
-        echo "Stopping because STOP_IMMEDIATELY is present"
-        exit
-    fi
-
-    echo "${solver} $(cat "${OUT_FILE}/results/${solver}/table_entry.txt")" >> "${OUT_FILE}/results/summary_table.txt"
+    if [ $RETCODE -eq 1 ]; then
+        echo "WARNING: script failed"
+        echo "stopping after critical error"
+        exit 1
+    fi 
 done
 
 echo "All experiments finished."
