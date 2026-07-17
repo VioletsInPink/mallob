@@ -1,24 +1,16 @@
 #!/bin/bash
 
 #####################################################################
-# 8 for normal utilization, keeping hardware threads idle
-# 4 for full utilization, spawning a solver at each hardware thread
-nhwthreadsperproc=4
-
 # Some environment variables for Mallob
 RDMAV_FORK_SAFE=1
-NPROCS="$(($(nproc)/$nhwthreadsperproc))"
-THREADS_PER_PROC=4
+# configured for AMD EPYC™ 7713
+# of CPU Cores 64
+# of Threads 128
+# 16 x 8 increases the synchronisation of clauses
+# useful for vivify only. Since it relies on clause sharing
+NPROCS=16
+THREADS_PER_PROC=8
 PATH="build:$PATH"
-
-# Clause buffering decay factor. Usually 1.0 for modestly parallel setups
-# and 0.9 for massively parallel setups.
-# cbdf=1.0
-
-# Run all instances from this index up to the end
-# (Default: 1; set to another number i if continuing an interrupted 
-# experiment where i-1 instances were run successfully)
-startinstance=1
 
 : "${portfolio:?portfolio missing}"
 : "${timeout:?timeout missing}"
@@ -26,14 +18,10 @@ startinstance=1
 : "${sublogdir:?sublogdir missing}"
 : "${download_dir:?download_dir missing}"
 
-
 max_timout="$(($timeout + 15))"
 
-# TODO Add further options to these arguments Mallob is called with.
-malloboptions="-t=$THREADS_PER_PROC -jwl=$timeout -T=$max_timout -v=3 -trace-dir=../trace -processes-per-host=$NPROCS -satsolver=$portfolio -vivi=$vivify"
-# echo $malloboptions
+malloboptions="-watchdog=0 -t=$THREADS_PER_PROC -jwl=$timeout -T=$max_timout -v=3 -trace-dir=../trace -processes-per-host=$NPROCS -satsolver=$portfolio -vivi=$vivify"
 #####################################################################
-
 
 if [ -z $1 ]; then
     echo "Usage:"
