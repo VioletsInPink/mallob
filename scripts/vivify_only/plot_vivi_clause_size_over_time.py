@@ -91,6 +91,9 @@ def main():
         if xs:
             plt.scatter(xs, ys, marker=marker, label=name, s=8)
 
+        if kind == "c":
+            plt.yscale("log")
+
     plt.xlabel("Solver Time")
     plt.ylabel("Clause length")
     plt.legend()
@@ -111,6 +114,7 @@ def main():
 
     plt.xlabel("clause length")
     plt.ylabel("occurence count")
+    plt.yscale("log")
     plt.title("Occurences of Clause length in vivified clauses")
     plt.savefig(sys.argv[2] + "/clause_length_distribution_" + sys.argv[3] + ".svg")
 
