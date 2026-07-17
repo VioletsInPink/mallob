@@ -1,53 +1,55 @@
 #!/usr/bin/env bash
 
-set -e  # stop on error
+set -e
 
-NPROCS=4
+RES_DIR="$1"
+OUT_DIR="$2"
 
-FILES=("r3unsat_200" "r3unsat_250" "r3unsat_300" "r3sat_200" "r3sat_300")
-VIVI_VALUES=(0 1)
+if [[ -z "$RES_DIR" || -z "$OUT_DIR" ]]; then
+    echo "Usage: $0 <results_dir> <output_dir>"
+    exit 1
+fi
 
-for file in "${FILES[@]}"; do
-  for vivi in "${VIVI_VALUES[@]}"; do
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+mkdir -p "$OUT_DIR"
 
-    echo "=============================="
-    echo "Running file=$file with vivi=$vivi"
-    echo "=============================="
+# Each portfolio directory
+for portfolio_dir in "$RES_DIR"/*; do
 
-    # clean log directory
-    rm -rf log
-    mkdir -p log
-
-    # export environment variables properly
-    export RDMAV_FORK_SAFE=1
-    export NPROCS=$NPROCS
-
-    # run MPI job
-    mpirun -np 4 --bind-to core \
-      build/mallob \
-      -mono="instances/${file}.cnf" \
-      -t=8 \
-      -satsolver='(v){3}(c)*' \
-      -log=log \
-      -spl=4 \
-      -spd=log \
-      -sld=log \
-      -vivi=${vivi} \
-      -quiet
-
-    # define output name for plotting
-    if [ "$vivi" -eq 1 ]; then
-      OUTNAME="${file}_withCadical"
-    else
-      OUTNAME="${file}"
+    if [[ ! -d "$portfolio_dir" ]]; then
+        continue
     fi
 
-    # run plotting script
-    python scripts/vivify_only/plot_vivi_clause_size_over_time.py \
-      log "../../Bachelorarbeit: Obsidian Vault" "${OUTNAME}"
+    # Skip plot directories
+    if [[ "$name" == "plot" || "$name" == "plots" ]]; then
+        continue
+    fi
 
-    python scripts/vivify_only/plot_vivifies_total_over_time.py \
-      log "../../Bachelorarbeit: Obsidian Vault" "${OUTNAME}"
+    name=$(basename "$portfolio_dir")
 
-  done
+    echo "=============================="
+    echo "Portfolio: ${name}"
+
+
+    for file_dir in "$portfolio_dir"/*; do
+        filename=$(basename "$file_dir")
+
+        if [[ ! -d "$file_dir" ]]; then
+            continue
+        fi
+
+        echo "Running ${name}:${filename}"
+
+        OUTNAME="${name}-${filename}"
+
+        python "${SCRIPT_DIR}/plot_vivi_clause_size_over_time.py" \
+            "$portfolio_dir/$filename" \
+            "${OUT_DIR}" \
+            "${OUTNAME}"
+
+        python "${SCRIPT_DIR}/plot_vivifies_total_over_time.py" \
+            "$portfolio_dir/$filename" \
+            "${OUT_DIR}" \
+            "${OUTNAME}"
+    done
 done
