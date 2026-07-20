@@ -2,9 +2,11 @@ import matplotlib.pyplot as plt
 import matplotlib
 import sys
 
+import statistics_extractor
+
 matplotlib.use("Agg")
 
-INPUT_FILE = sys.argv[1] + "/summary_table.txt"
+RESULT_DIR = sys.argv[1]
 OUT_TEX = sys.argv[2] + "/table.tex"
 OUT_SVG = sys.argv[2] + "/table.svg"
 OUT_MD = sys.argv[2] + "/table.md"
@@ -14,13 +16,11 @@ data = []
 # -------------------------
 # LOAD DATA
 # -------------------------
-with open(INPUT_FILE, "r") as f:
-    for line in f:
-        parts = line.strip().split()
-        data.append(parts)
+stats = statistics_extractor.getStats(RESULT_DIR)
 
-# sort by PAR2 (lower is better)
-# data.sort(key=lambda x: x[4])
+data.append(["solver", "solved", "sat", "unsat", "par2", "busy_time", "vivify_time", "vivified", "vivify_throughput", "percent_time_in_vivify"])
+for s in stats:
+    data.append([s.solver_name, s.solved, s.sat, s.unsat, round(s.par2, 3), round(s.busy_time_per_instance, 3), round(s.vivify_time_per_instance, 3), round(s.vivified_per_instance, 3), round(s.vivified_throughput), round(100 * s.vivify_time_per_instance / s.busy_time_per_instance, 3)])
 
 # -------------------------
 # MARKDOWN TABLE
