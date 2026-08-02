@@ -8,9 +8,30 @@ import numpy as np
 import argparse
 import re
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from tqdm import tqdm
 import pickle
+
+def plotable(prop):
+    prop.fget.plotable = True
+    return prop
+
+@classmethod
+def get_plotable(cls):
+    result = []
+
+    # Dataclass fields
+    if is_dataclass(cls):
+        for f in fields(cls):
+            if f.metadata.get("plotable", False):
+                result.append(f.name)
+
+    # Plotable properties/functions
+    for name, attr in vars(cls).items():
+        if isinstance(attr, property) and getattr(attr.fget, "plotable", False):
+            result.append(name)
+
+    return result
 
 class RESULT(Enum):
     UNKOWN = 1
@@ -19,30 +40,148 @@ class RESULT(Enum):
 
 @dataclass
 class InstanceStats:
-    busy_time: float = 0
-    result: RESULT = RESULT.UNKOWN
-    num_active_threads: int = 0
-    num_active_threads_per_proc: int = 0
+    busy_time: float = field(default=0, metadata={"plotable": True})
+    result: RESULT = field(default=RESULT.UNKOWN, metadata={"plotable": False})
+    num_active_threads: int = field(default=0, metadata={"plotable": True})
+    num_active_threads_per_proc: int = field(default=0, metadata={"plotable": True})
 
-    vivified: float = 0
-    vivify_time: float = 0
-    solve_time: float = 0
+    subsumed: float = field(default=0, metadata={"plotable": True})
+
+    vivified: float = field(default=0, metadata={"plotable": True})
+    vivify_strs: float = field(default=0, metadata={"plotable": True})
+    vivify_subs: float = field(default=0, metadata={"plotable": True})
+    vivify_checked: float = field(default=0, metadata={"plotable": True})
+    vivify_sched: float = field(default=0, metadata={"plotable": True})
+    vivify_time: float = field(default=0, metadata={"plotable": True})
+    solve_time: float = field(default=0, metadata={"plotable": True})
+
+    prod: float = field(default=0, metadata={"plotable": True})
+    prod_adm: float = field(default=0, metadata={"plotable": True})
+    prod_drp: float = field(default=0, metadata={"plotable": True})
+    prod_flt: float = field(default=0, metadata={"plotable": True})
+
+    vivi_prod: float = field(default=0, metadata={"plotable": True})
+    vivi_prod_adm: float = field(default=0, metadata={"plotable": True})
+    vivi_prod_drp: float = field(default=0, metadata={"plotable": True})
+    vivi_prod_flt: float = field(default=0, metadata={"plotable": True})
+
+    @plotable
+    @property
+    def vivified_percent(self):
+        return self.vivified / self.vivify_checked if self.vivify_checked > 0 else 0
+
+    @plotable
+    @property
+    def vivify_strs_percent(self):
+        return self.vivify_strs / self.vivify_checked if self.vivify_checked > 0 else 0
+
+    @plotable
+    @property
+    def vivify_subs_percent(self):
+        info("uses sched not checked as base")
+        return self.vivify_subs / self.vivify_sched if self.vivify_checked > 0 else 0
+
+    plotable = get_plotable
 
 @dataclass
 class Stats:
-    solver_name: str = ""
-    num_instances: int = 0
-    solved: int = 0
-    sat: int = 0
-    unsat: int = 0
-    par2: float = 0
+    solver_name: str = field(metadata={"plotable": False})
+    num_instances: int = field(default=0, metadata={"plotable": True})
+    solved: int = field(default=0, metadata={"plotable": True})
+    sat: int = field(default=0, metadata={"plotable": True})
+    unsat: int = field(default=0, metadata={"plotable": True})
+    par2: float = field(default=0, metadata={"plotable": True})
  
-    busy_time_per_instance: float = 0
-    vivified_per_instance: float = 0
-    vivify_time_per_instance: float = 0
-    vivified_throughput: float = 0
+    @plotable
+    @property
+    def avg(self):
+        class InstanceAverage:
+            def __init__(self, instances):
+                self.instances = instances
+
+            def __getattr__(self, name):
+                if not self.instances:
+                    raise AttributeError("No instance stats available")
+
+                if not hasattr(self.instances[0], name):
+                    raise AttributeError(
+                        f"{type(self.instances[0]).__name__} has no field '{name}'"
+                    )
+
+                values = [
+                    getattr(x, name)
+                    for x in self.instances
+                    if hasattr(x, name)
+                ]
+                return sum(values) / len(values) if values else 0
+
+        return InstanceAverage(self.instance_stats)
+
+    @plotable
+    @property
+    def percent(self):
+        class PercentRoot:
+            def __init__(self, obj):
+                self.obj = obj
+
+            def __getattr__(self, numerator_source):
+                return SourceProxy(self.obj, numerator_source)
+
+        class SourceProxy:
+            def __init__(self, obj, numerator_source):
+                self.obj = obj
+                self.numerator_source = numerator_source
+
+            def __getattr__(self, numerator_field):
+                return NumeratorProxy(
+                    self.obj,
+                    self.numerator_source,
+                    numerator_field,
+                )
+
+        class NumeratorProxy:
+            def __init__(self, obj, numerator_source, numerator_field):
+                self.obj = obj
+                self.numerator_source = numerator_source
+                self.numerator_field = numerator_field
+
+            def __getattr__(self, denominator_source):
+                return DenominatorProxy(
+                    self.obj,
+                    self.numerator_source,
+                    self.numerator_field,
+                    denominator_source,
+                )
+
+        class DenominatorProxy:
+            def __init__(
+                self,
+                obj,
+                numerator_source,
+                numerator_field,
+                denominator_source,
+            ):
+                self.obj = obj
+                self.numerator_source = numerator_source
+                self.numerator_field = numerator_field
+                self.denominator_source = denominator_source
+
+            def __getattr__(self, denominator_field):
+                numerator = getattr(
+                    getattr(self.obj, self.numerator_source),
+                    self.numerator_field,
+                )
+                denominator = getattr(
+                    getattr(self.obj, self.denominator_source),
+                    denominator_field,
+                )
+
+                return numerator / denominator * 100 if denominator else 0
+
+        return PercentRoot(self)
 
     instance_stats: list[InstanceStats] = field(default_factory=list)
+    plotable = get_plotable
 
 @dataclass
 class Setup:
@@ -52,8 +191,11 @@ class Setup:
     timeout: int
     vivify: bool
 
-def warn(msg):
-    tqdm.write(f"\033[93mWARNING: {msg}\033[0m")
+def warn(*msg):
+    tqdm.write(f"\033[93mWARNING: {' '.join(map(str, msg))}\033[0m")
+
+def info(*msg):
+    tqdm.write(f"\033[94mInfo: {''.join(map(str, msg))}\033[0m")
 
 def read_setup(results_dir: Path):
     setup = Setup
@@ -89,7 +231,7 @@ def read_setup(results_dir: Path):
 
     return setup
 
-def get_busy_time_and_result(instance_dir, setup: Setup, stats: InstanceStats):
+def get_busy_time_and_result(instance_dir, setup: type[Setup], stats: InstanceStats):
     outfile = Path(str(instance_dir / "OUT"))
 
     stats.result = RESULT.UNKOWN
@@ -126,6 +268,68 @@ def get_busy_time_and_result(instance_dir, setup: Setup, stats: InstanceStats):
         warn(f"no busy time found in {instance_dir}")
         stats.busy_time = 0.0
 
+def get_clause_sharing_statistics(instance_dir: Path, stats: InstanceStats):
+    found_threads = 0
+
+    pattern = re.compile(r"S(\d+)\.\d+\s+vivification only")
+    vivify_threads = []
+    # each process directory
+    for proc_dir in instance_dir.iterdir():
+        if not proc_dir.is_dir() or not proc_dir.name.isdigit():
+            continue
+
+        # get vivification threads
+        job_file = list(proc_dir.glob("jobs.*"))
+        if not job_file:
+            return False
+
+        for logfile in job_file:
+            with open(logfile, "r", encoding="utf8") as f:
+                for line in f:
+                    m = pattern.search(line)
+                    if m:
+                        vivify_threads.append(int(m.group(1)))
+
+        # subproc output files
+        subproc_files = list(proc_dir.glob("subproc.*"))
+        if not subproc_files:
+            return False
+
+        pattern_subproc = re.compile(r"END\s+S(\d+).*?prod:(\d+).*?flt:(\d+)\s+adm:(\d+)\s+drp:(\d+)")
+        for logfile in subproc_files:
+            with open(logfile) as f:
+                for line in f:
+                    m = pattern_subproc.search(line)
+                    if m:
+                        found_threads += 1
+                        solver_id = int(m.group(1))
+                        stats.prod += int(m.group(2))
+                        stats.prod_flt += int(m.group(3))
+                        stats.prod_adm += int(m.group(4))
+                        stats.prod_drp += int(m.group(5))
+
+
+                        if solver_id in vivify_threads:
+                            stats.vivi_prod += int(m.group(2))
+                            stats.vivi_prod_flt += int(m.group(3))
+                            stats.vivi_prod_adm += int(m.group(4))
+                            stats.vivi_prod_drp += int(m.group(5))
+
+    if found_threads > 0:
+        stats.prod /= found_threads
+        stats.prod_adm /= found_threads
+        stats.prod_drp /= found_threads
+        stats.prod_flt /= found_threads
+
+        stats.vivi_prod /= found_threads
+        stats.vivi_prod_adm /= found_threads
+        stats.vivi_prod_drp /= found_threads
+        stats.vivi_prod_flt /= found_threads
+
+
+    if found_threads != stats.num_active_threads:
+        warn(f"found results for {found_threads}, expected {stats.num_active_threads} in {instance_dir.name}")
+
 def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
     found_threads = 0
 
@@ -149,6 +353,41 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                     )
                     if m:
                         stats.vivified += int(m.group(1))
+
+                    m = re.search(
+                        r"c \s+vivifystrs:\s+(\d+)",
+                        line
+                    )
+                    if m:
+                        stats.vivify_strs += int(m.group(1))
+
+                    m = re.search(
+                        r"c \s+vivifysubs:\s+(\d+)",
+                        line
+                    )
+                    if m:
+                        stats.vivify_subs += int(m.group(1))
+
+                    m = re.search(
+                        r"c \s+vivifychecks:\s+(\d+)",
+                        line
+                    )
+                    if m:
+                        stats.vivify_checked += int(m.group(1))
+
+                    m = re.search(
+                        r"c \s+vivifysched:\s+(\d+)",
+                        line
+                    )
+                    if m:
+                        stats.vivify_sched += int(m.group(1))
+
+                    m = re.search(
+                        r"c subsumed:\s+(\d+)",
+                        line
+                    )
+                    if m:
+                        stats.subsumed += int(m.group(1))
 
         # Parse profile statistics
         profile_files = list(proc_dir.glob("profile.#*"))
@@ -178,7 +417,12 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                         stats.solve_time += float(m.group(1))
 
     if found_threads > 0:
+        stats.subsumed /= found_threads
         stats.vivified /= found_threads
+        stats.vivify_strs /= found_threads
+        stats.vivify_subs /= found_threads
+        stats.vivify_checked /= found_threads
+        stats.vivify_sched /= found_threads
         stats.vivify_time /= found_threads
         stats.solve_time /= found_threads
 
@@ -187,15 +431,11 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
 
     return True
 
-def createStats(solver_name: str, instance_stats: list[InstanceStats], setup: Setup):
-
+def createStats(solver_name: str, instance_stats: list[InstanceStats], setup: type[Setup]):
     sat = 0
     unsat = 0
     par2 = 0
 
-    vivified = 0
-    vivi_time = 0
-    busy_time = 0
     for instance in instance_stats:
         match instance.result:
             case RESULT.SAT:
@@ -207,16 +447,9 @@ def createStats(solver_name: str, instance_stats: list[InstanceStats], setup: Se
             case RESULT.UNKOWN:
                 par2 += 2*setup.timeout
 
-        vivified += instance.vivified
-        vivi_time += instance.vivify_time
-        busy_time += instance.busy_time
-
-
     par2 /= len(instance_stats)
-    vivified /= len(instance_stats)
-    vivi_time /= len(instance_stats)
-    busy_time /= len(instance_stats)
-    return Stats(solver_name, len(instance_stats), sat + unsat, sat, unsat, par2, busy_time, vivified, vivi_time, vivified / vivi_time if vivi_time > 0 else 0, instance_stats)
+
+    return Stats(solver_name, len(instance_stats), sat + unsat, sat, unsat, par2, instance_stats)
 
 def extract(results_dir):
     results_dir = Path(results_dir)
@@ -233,6 +466,9 @@ def extract(results_dir):
         if not get_cadical_vivi_stats(instance_dir, stats):
             no_stats_found.append(instance_dir.name)
 
+        if not get_clause_sharing_statistics(instance_dir, stats):
+            no_stats_found.append(instance_dir.name)
+
         instance_stats.append(stats)
 
     stats = createStats(results_dir.name, instance_stats, setup)
@@ -247,10 +483,6 @@ def extract(results_dir):
     )
 
     return stats
-
-def clean(results_dir):
-    results_dir = Path(results_dir)
-    print("cleaning")
 
 def getStats(results_dir):
     results_dir = Path(results_dir)
@@ -291,17 +523,8 @@ def main():
         help="Directory containing the experiment results."
     )
 
-    parser.add_argument(
-        "--clean",
-        action="store_true",
-        help="Remove generated summary files before extracting."
-    )
-
     args = parser.parse_args()
-    if args.clean:
-        clean(args.results_dir)
-    else:
-        getStats(args.results_dir)
+    getStats(args.results_dir)
 
 if __name__ == "__main__":
     main()
