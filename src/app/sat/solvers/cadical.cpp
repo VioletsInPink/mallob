@@ -146,6 +146,11 @@ Cadical::Cadical(const SolverSetup& setup)
 		okay &= solver->set("vivifyonlyid", setup.vivifyIndex); // set this as the n'th solver of this type
 		okay &= solver->set("vivifyonlycount", setup.vivifyCount); // set # instances of this type of cadical
 		assert(okay);
+	} else {
+    LOGGER(_logger, V3_VERB, "normal vivification setup -- %d / %d \n", solverRank + 1, maxNumSolvers);
+		okay &= solver->set("vivifyonlyid", solverRank); // set this as the n'th solver of this type
+		okay &= solver->set("vivifyonlycount", maxNumSolvers); // set # instances of this type of cadical
+		assert(okay);
 	}
 }
 
