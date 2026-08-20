@@ -217,6 +217,10 @@ void Cadical::diversify(int seed) {
     // we skip the flavour, as this should be independent
     assert(okay);
     return;
+  } else {
+  	// set this so that vivification is halfed
+		okay &= solver->set("vivifymineff", 2e2);
+		okay &= solver->set("vivifymaxeff", 2e4);
   }
 
 	if (_setup.flavour == PortfolioSequence::SAT) {
