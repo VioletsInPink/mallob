@@ -48,11 +48,11 @@ stats = sorted(
     key=cadical_sort_key,
 )
 
-data.append([    "solver",      "solved",               "par2",           "busy_time",                       "",                                                      "checked",                                                "vivified",                                                       "checked per sec",                                                                  "prod", "vivi prod", "subsumed"])
-data.append([    "",            "sat + unsat",          "",               "vivify_time",                     "vivify time%",                                          "vivified%",                                              "str + subs",                                                     "vivified per sec",                                                                 "flt + adm + drp", "flt + adm + drp", ""])
+data.append([    "solver",      "solved",               "par2",          "busy_time",                 "",                                                "scheduled",                                       "vivified",                                           "scheduled per sec",                                                             "subsumed"])
+data.append([    "",            "sat + unsat",          "",              "vivify_time",               "vivify time%",                                    "vivified%",                                       "str + subs",                                         "vivified per sec",                                                              "subsumed without vivification"])
 for s in stats:
-    data.append([s.solver_name, s.solved,               round(s.par2, 2), f"{round(s.avg.busy_time, 2)}s",   "",                                                      round(s.avg.vivify_checked, 2),                           f"{round(s.avg.vivified, 2)}",                                    round(s.avg.vivify_checked / s.avg.vivify_time if s.avg.vivify_time > 0 else 0, 2), round(s.avg.prod, 2), round(s.avg.vivi_prod, 2), round(s.avg.subsumed, 2)])
-    data.append(["",            f"{s.sat} + {s.unsat}", "",               f"{round(s.avg.vivify_time, 2)}s", f"{round(s.percent.avg.vivify_time.avg.busy_time, 2)}%", f"{round(s.percent.avg.vivified.avg.vivify_checked,2)}%", f"{round(s.avg.vivify_strs, 2)} + {round(s.avg.vivify_subs, 2)}", round(s.avg.vivified / s.avg.vivify_time if s.avg.vivify_time > 0 else 0, 2),       f"{round(s.avg.prod_flt, 2)} + {round(s.avg.prod_adm, 2)} + {round(s.avg.prod_drp, 2)}", f"{round(s.avg.vivi_prod_flt, 2)} + {round(s.avg.vivi_prod_adm, 2)} + {round(s.avg.vivi_prod_drp, 2)}", ""])
+    data.append([s.solver_name, s.solved,               f"{s.par2:.2f}", f"{s.avg.busy_time:.2f}s",    "",                                                f"{s.avg.vivify_sched:.2f}",                       f"{s.avg.vivified:.2f}",                              f"{s.avg.vivify_sched / s.avg.vivify_time if s.avg.vivify_time > 0 else 0:.2f}", f"{s.avg.subsumed:.2f}"])
+    data.append(["",            f"{s.sat} + {s.unsat}", "",              f"{s.avg.vivify_time:.2f}s", f"{s.percent.avg.vivify_time.avg.busy_time:.2f}%", f"{s.percent.avg.vivified.avg.vivify_sched:.2f}%", f"{s.avg.vivify_strs:.2f} + {s.avg.vivify_subs:.2f}", f"{s.avg.vivified / s.avg.vivify_time if s.avg.vivify_time > 0 else 0:.2f}",     f"{(s.avg.subsumed / (1 - (s.percent.avg.vivify_time.avg.solve_time/ 100))):.2f}"])
 # -------------------------
 # MARKDOWN TABLE
 # -------------------------
@@ -76,15 +76,18 @@ print(f"Wrote Markdown table to {OUT_MD}")
 # -------------------------
 latex = []
 latex.append("\\begin{tabular}{" + "l"*len(data[0]) + "}")
-latex.append("\\hline")
+latex.append("\\toprule")
 latex.append(" & ".join(map(str, data[0])).replace("_", r"\_").replace("%", r"\%") + "\\\\")
 latex.append(" & ".join(map(str, data[1])).replace("_", r"\_").replace("%", r"\%") + "\\\\")
-latex.append("\\hline")
+latex.append("\\midrule")
 
-for row in data[2:]:
+for i, row in enumerate(data[2:]):
     latex.append(" & ".join(map(str, row)).replace("_", r"\_").replace("%", r"\%") + "\\\\")
+    if i % 2 == 1:
+        latex.append("\\addlinespace")
 
-latex.append("\\hline")
+latex.pop()
+latex.append("\\bottomrule")
 latex.append("\\end{tabular}")
 
 with open(OUT_TEX, "w") as f:

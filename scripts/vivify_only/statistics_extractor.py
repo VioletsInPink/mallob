@@ -46,6 +46,7 @@ class InstanceStats:
     num_active_threads_per_proc: int = field(default=0, metadata={"plotable": True})
 
     subsumed: float = field(default=0, metadata={"plotable": True})
+    subsume_time: float = field(default=0, metadata={"plotable": True})
 
     vivified: float = field(default=0, metadata={"plotable": True})
     vivify_strs: float = field(default=0, metadata={"plotable": True})
@@ -79,7 +80,27 @@ class InstanceStats:
     @property
     def vivify_subs_percent(self):
         info("uses sched not checked as base")
-        return self.vivify_subs / self.vivify_sched if self.vivify_checked > 0 else 0
+        return 100* self.vivify_subs / self.vivify_sched if self.vivify_checked > 0 else 0
+
+    @plotable
+    @property
+    def percent(self):
+        class PercentRoot:
+            def __init__(self, obj):
+                self.obj = obj
+
+            def __getattr__(self, numerator):
+                return NumeratorProxy(self.obj, numerator)
+
+        class NumeratorProxy:
+            def __init__(self, obj,  numerator):
+                self.obj = obj
+                self.numerator = numerator
+            def __getattr__(self, denominator_s):
+                numerator = getattr(self.obj, self.numerator)
+                denominator = getattr(self.obj, denominator_s)
+                return numerator / denominator * 100 if denominator else 0
+        return PercentRoot(self)
 
     plotable = get_plotable
 
@@ -353,6 +374,7 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                     )
                     if m:
                         stats.vivified += int(m.group(1))
+                        continue
 
                     m = re.search(
                         r"c \s+vivifystrs:\s+(\d+)",
@@ -360,6 +382,7 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                     )
                     if m:
                         stats.vivify_strs += int(m.group(1))
+                        continue
 
                     m = re.search(
                         r"c \s+vivifysubs:\s+(\d+)",
@@ -367,6 +390,7 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                     )
                     if m:
                         stats.vivify_subs += int(m.group(1))
+                        continue
 
                     m = re.search(
                         r"c \s+vivifychecks:\s+(\d+)",
@@ -374,6 +398,7 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                     )
                     if m:
                         stats.vivify_checked += int(m.group(1))
+                        continue
 
                     m = re.search(
                         r"c \s+vivifysched:\s+(\d+)",
@@ -381,6 +406,7 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                     )
                     if m:
                         stats.vivify_sched += int(m.group(1))
+                        continue
 
                     m = re.search(
                         r"c subsumed:\s+(\d+)",
@@ -388,6 +414,7 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                     )
                     if m:
                         stats.subsumed += int(m.group(1))
+                        continue
 
         # Parse profile statistics
         profile_files = list(proc_dir.glob("profile.#*"))
@@ -415,6 +442,15 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                     )
                     if m:
                         stats.solve_time += float(m.group(1))
+
+                    # Example:
+                    # 0.32    0.77% vivify
+                    m = re.match(
+                        r"\s*([0-9.]+)\s+[0-9.]+%\s+subsume",
+                        line
+                    )
+                    if m:
+                        stats.subsume_time += float(m.group(1))
 
     if found_threads > 0:
         stats.subsumed /= found_threads
@@ -466,8 +502,8 @@ def extract(results_dir):
         if not get_cadical_vivi_stats(instance_dir, stats):
             no_stats_found.append(instance_dir.name)
 
-        if not get_clause_sharing_statistics(instance_dir, stats):
-            no_stats_found.append(instance_dir.name)
+        # if not get_clause_sharing_statistics(instance_dir, stats):
+        #     no_stats_found.append(instance_dir.name)
 
         instance_stats.append(stats)
 
