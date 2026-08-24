@@ -199,7 +199,7 @@ void Cadical::diversify(int seed) {
     okay = solver->set("inprocessing", 1);
     okay &= solver->set("vivify", 1);
     okay &= solver->set("vivifyonly", 1);
-    okay &= solver->set("subsume", 0);
+    okay &= solver->set("subsume", 1);
     okay &= solver->set("transred", 0);
 
     okay &= solver->set("restart", 0);
