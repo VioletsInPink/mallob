@@ -53,7 +53,9 @@ class InstanceStats:
     vivify_subs: float = field(default=0, metadata={"plotable": True})
     vivify_checked: float = field(default=0, metadata={"plotable": True})
     vivify_sched: float = field(default=0, metadata={"plotable": True})
+    vivify_time_per_thread: float = field(default=0, metadata={"plotable": True})
     vivify_time: float = field(default=0, metadata={"plotable": True})
+    solve_time_per_thread: float = field(default=0, metadata={"plotable": True})
     solve_time: float = field(default=0, metadata={"plotable": True})
 
     prod: float = field(default=0, metadata={"plotable": True})
@@ -453,14 +455,14 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                         stats.subsume_time += float(m.group(1))
 
     if found_threads > 0:
-        stats.subsumed /= found_threads
-        stats.vivified /= found_threads
-        stats.vivify_strs /= found_threads
-        stats.vivify_subs /= found_threads
-        stats.vivify_checked /= found_threads
-        stats.vivify_sched /= found_threads
-        stats.vivify_time /= found_threads
-        stats.solve_time /= found_threads
+        # stats.subsumed /= found_threads
+        # stats.vivified /= found_threads
+        # stats.vivify_strs /= found_threads
+        # stats.vivify_subs /= found_threads
+        # stats.vivify_checked /= found_threads
+        # stats.vivify_sched /= found_threads
+        stats.vivify_time_per_thread /= found_threads
+        stats.solve_time_per_thread /= found_threads
 
     if found_threads != stats.num_active_threads:
         warn(f"found results for {found_threads}, expected {stats.num_active_threads} in {instance_dir.name}")
@@ -522,35 +524,47 @@ def extract(results_dir):
 
 def getStats(results_dir):
     results_dir = Path(results_dir)
-        
-    if Path(results_dir/"stats.pickle").is_file():
-        with open(results_dir/"stats.pickle", 'rb') as cache:
-            warn("using cached results")
-            return pickle.load(cache)
+    cache_path = results_dir / "stats.pickle"
 
     if not results_dir.is_dir():
         print(f"ERROR: {results_dir} is not a directory")
         exit(1)
 
-    stats = []
+    # Load existing cache
+    if cache_path.is_file():
+        with open(cache_path, "rb") as cache:
+            warn("using cached results")
+            stats = pickle.load(cache)
+    else:
+        stats = []
+
+    # Keep track of which portfolio directories are already cached
+    cached_portfolios = [stat.solver_name for stat in stats]
+    changed = False
 
     for portfolio_dir in sorted(results_dir.iterdir()):
         if not portfolio_dir.is_dir():
             continue
 
-        # Skip non-portfolio directories if needed
+        # Skip non-portfolio directories
         if not (portfolio_dir / "setup.txt").exists():
             print(f"Skipping {portfolio_dir}: no setup.txt")
             continue
 
+        if portfolio_dir.name in cached_portfolios:
+            continue
+
         print(f"\n=== Processing {portfolio_dir.name} ===")
+
         stats.append(extract(portfolio_dir))
+        changed = True
 
-    with open(results_dir/"stats.pickle", 'ab') as cache:
-        pickle.dump(stats, cache)
+    # Rewrite cache only if new portfolios were found
+    if changed:
+        with open(cache_path, "wb") as cache:
+            pickle.dump(stats, cache)
+
     return stats
-
-
 def main():
     parser = argparse.ArgumentParser()
 

@@ -1,560 +1,1670 @@
 #!/usr/bin/env python3
 
+from matplotlib.pylab import xlim
 import argparse
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Optional
+
 import matplotlib
 matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import numpy as np
-import statistics_extractor as st
-from pathlib import Path
-import re
 from scipy.optimize import curve_fit
+
+import statistics_extractor as st
+
+
+# ===========================================================================
+# Solver selection and fitting
+# ===========================================================================
+
+@dataclass
+class SolverGroup:
+    """
+    A group of solvers to plot.
+
+    pattern:
+        Regular expression matching solver names.
+
+        '*' is supported as a convenient shorthand for '.*'.
+
+        Examples:
+            *_dist
+            .*_dist
+            2024_CaDiCaL_v\\d+%
+            yyyy_CaDiCaL_v\\d+%
+
+    fit:
+        Name of the fit to apply to this group.
+
+        Supported:
+            None
+            "linear"
+            "inverse"
+    """
+    name: str
+    pattern: str
+    fit: Optional[str] = None
+    rotation: Optional[int] = None
+    ha: str = "left"
+    va: str = "bottom"
+
+
+@dataclass
+class PlotDefinition:
+    """
+    Definition of a plot.
+
+    groups may contain multiple solver groups. Each group is plotted
+    independently and can have its own fitted line.
+    """
+    name: str
+    groups: list[SolverGroup]
+
+
+def regex_matches(pattern: str, solver_name: str) -> bool:
+    """
+    Match a solver name against a regex.
+
+    '*' is accepted as shorthand for '.*', making patterns such as
+    '*_dist' convenient.
+    """
+    pattern = pattern.replace("*", ".*")
+
+    try:
+        return re.fullmatch(pattern, solver_name) is not None
+    except re.error as exc:
+        raise ValueError(
+            f"Invalid solver regex {pattern!r}: {exc}"
+        ) from exc
+
+
+def select_stats(stats, pattern: str):
+    """Return statistics whose solver name matches pattern."""
+    return [
+        stat
+        for stat in stats
+        if regex_matches(pattern, stat.solver_name)
+    ]
+
+
+# ===========================================================================
+# Fits
+# ===========================================================================
+
+def linear_fit(x, a, b):
+    return a * x + b
+
+
+def inverse_fit(x, a, b, c):
+    return a / (x + c) + b
+
+def log_fit(x, a, b, c):
+    return a * np.log(x + c) + b
+
+def m_log_fit(x, a, b, c):
+    return a * np.log(c - x) + b
+
+FIT_FUNCTIONS = {
+    "linear": linear_fit,
+    "inverse": inverse_fit,
+    "log": log_fit,
+    "mlog": m_log_fit,
+}
+
+
+def draw_fit(
+    xs,
+    ys,
+    fit_name,
+    *,
+    label_prefix="",
+    xlim=None,
+):
+    """
+    Draw a fitted line.
+
+    Returns the matplotlib line label, or None if no fit was requested.
+    """
+    if fit_name is None:
+        return None
+
+    if fit_name not in FIT_FUNCTIONS:
+        raise ValueError(
+            f"Unknown fit {fit_name!r}. "
+            f"Available fits: {', '.join(FIT_FUNCTIONS)}"
+        )
+
+    xs = np.asarray(xs, dtype=float)
+    ys = np.asarray(ys, dtype=float)
+
+    mask = np.isfinite(xs) & np.isfinite(ys)
+
+    if fit_name == "inverse" or fit_name == "log":
+        mask &= xs > 0
+
+    xs = xs[mask]
+    ys = ys[mask]
+
+    if len(xs) < 2:
+        return None
+
+    fit_function = FIT_FUNCTIONS[fit_name]
+
+    try:
+        if fit_name =="log" or fit_name=="inverse" or fit_name=="mlog" :
+            params, _ = curve_fit(fit_function, xs, ys, 
+                bounds=(
+                [-np.inf, -np.inf, 0 + 1e-9],
+                [ np.inf,  np.inf,  np.inf]
+                    ),)
+        else:
+            params, _ = curve_fit(fit_function, xs, ys)
+
+    except (RuntimeError, ValueError):
+        return None
+
+    if xlim is not None:
+        x_min, x_max = xlim
+    else:
+        x_min = np.min(xs)
+        x_max = np.max(xs)
+
+    if fit_name == "inverse":
+        x_min = max(x_min, 0.01)
+
+    if x_max <= x_min:
+        return None
+
+    x_fit = np.linspace(x_min, x_max, 500)
+    y_fit = fit_function(x_fit, *params)
+
+    plt.plot(
+        x_fit,
+        y_fit,
+        linestyle="--",
+    )
+
+
+# ===========================================================================
+# General helpers
+# ===========================================================================
+
+def cadical_sort_key(stat):
+    name = stat.solver_name
+
+    match = re.match(r"^(CaDiCaL)(.*)$", name)
+    if not match:
+        return (name,)
+
+    suffix = match.group(2)
+
+    if suffix == "":
+        return (0, 0)
+
+    if suffix == "-":
+        return (1, 0)
+
+    match = re.fullmatch(r"_v(\d+\.?\d*)%", suffix)
+    if match:
+        return (2, float(match.group(1)))
+
+    if suffix.startswith("+"):
+        match = re.search(r"_v(\d+)%", suffix)
+        if match:
+            return (3, int(match.group(1)))
+        return (3, 0)
+
+    return (4, suffix)
+
+
+def get_stats(results):
+    return sorted(
+        st.getStats(results),
+        key=cadical_sort_key,
+    )
+
+
+def save_plot(output_dir, filename):
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / filename)
+    plt.close()
+
+
+def annotate_point(stat, x, y, angle=0, ha="left", va="bottom"):
+    offset_y = 5 if "-" in stat.solver_name else 2
+
+    plt.annotate(
+        stat.solver_name,
+        (x, y),
+        xytext=(4, offset_y),
+        textcoords="offset points",
+        fontsize=8,
+        rotation=angle,
+        ha=ha,
+        va=va,
+        rotation_mode="anchor"
+    )
+
+
+def setup_plot(title, xlabel, ylabel):
+    plt.figure(figsize=(8, 6))
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+
+
+# ===========================================================================
+# Generic scatter plot
+# ===========================================================================
+
+def plot_scatter(
+    stats,
+    output_dir,
+    *,
+    x,
+    y,
+    title,
+    xlabel,
+    ylabel,
+    output,
+    groups=None,
+    skip=None,
+    yscale=None,
+    xlim=None,
+    ylim=None,
+    annotate=True,
+    legend=True,
+):
+    """
+    Create a scatter plot.
+
+    Every SolverGroup gets its own set of points and optional fit.
+    """
+
+    setup_plot(title, xlabel, ylabel)
+
+    any_points = False
+    all_xs = []
+    all_ys = []
+
+    if not groups:
+        groups = [
+            SolverGroup (
+                name="all",
+                pattern="*"
+            )
+        ]
+
+    for group in groups:
+        group_stats = select_stats(stats, group.pattern)
+
+        xs = []
+        ys = []
+
+        for stat in group_stats:
+            if skip is not None and skip(stat):
+                continue
+
+            x_value = x(stat)
+            y_value = y(stat)
+
+            if x_value is None or y_value is None:
+                continue
+
+            if not np.isfinite(x_value) or not np.isfinite(y_value):
+                continue
+
+            xs.append(x_value)
+            ys.append(y_value)
+
+            any_points = True
+
+            plt.scatter(
+                x_value,
+                y_value,
+                label=stat.solver_name,
+            )
+
+            if annotate:
+                if group.rotation: 
+                    annotate_point(stat, x_value, y_value, angle=group.rotation, ha=group.ha, va=group.va)
+                else:
+                    annotate_point(stat, x_value, y_value, ha=group.ha, va=group.va)
+
+        if not xs:
+            continue
+
+        all_xs.extend(xs)
+        all_ys.extend(ys)
+
+        draw_fit(
+            xs,
+            ys,
+            group.fit,
+        )
+
+    if not any_points:
+        plt.close()
+        return
+
+    if xlim is not None:
+        plt.xlim(*xlim)
+    else:
+        if all_xs:
+            x_min = min(all_xs)
+            x_max = max(all_xs)
+
+            if x_min == x_max:
+                x_min -= 1
+                x_max += 1
+
+            plt.xlim(x_min * 0.9, x_max * 1.2)
+
+    if ylim is not None:
+        plt.ylim(*ylim)
+    else:
+        if all_ys:
+            y_min = min(all_ys)
+            y_max = max(all_ys)
+
+            if y_min == y_max:
+                y_min -= 1
+                y_max += 1
+
+            plt.ylim(y_min * 0.8, y_max * 1.3)
+
+    if yscale is not None:
+        plt.yscale(yscale)
+
+    plt.grid(alpha=0.3)
+    if legend:
+        plt.legend()
+
+    save_plot(output_dir, output)
+
+
+# ===========================================================================
+# Generic step plot
+# ===========================================================================
+def plot_steps(
+    stats,
+    output_dir,
+    *,
+    x,
+    y,
+    title,
+    xlabel,
+    ylabel,
+    output,
+    groups=None,
+    yscale=None,
+    xlim=None,
+    ylim=None,
+    drawstyle="steps-post",
+    unique_styles=False,
+):
+    """
+    Create a step plot.
+
+    Each solver group is plotted separately.
+    """
+
+    setup_plot(title, xlabel, ylabel)
+
+    plotted = False
+
+    if groups:
+        for group in groups:
+            g_stats = select_stats(stats, group.pattern)
+    else:
+        g_stats = select_stats(stats, "*")
+
+    markers = ["o", "s", "^", "D", "v", "<", ">", "P", "X", "*", "h", "p"] 
+    linestyles = ["-", "--", "-.", ":"]
+    for i, stat in enumerate(g_stats):
+        x_values = x(stat)
+        y_values = y(stat)
+
+        if len(x_values) == 0 or len(y_values) == 0:
+            continue
+
+        style = {} 
+        if unique_styles: 
+            marker = markers[i % len(markers)] 
+            linestyle = linestyles[(i // len(markers)) % len(linestyles)] 
+            style.update( marker=marker, linestyle=linestyle, markersize=4, markevery=max(1, len(x_values) // 20), )
+
+        plt.plot(
+            x_values,
+            y_values,
+            label=stat.solver_name,
+            drawstyle=drawstyle,
+            linewidth=1,
+            **style,
+        )
+
+        plotted = True
+
+    if not plotted:
+        plt.close()
+        return
+
+    if xlim is not None:
+        plt.xlim(*xlim)
+
+    if ylim is not None:
+        plt.ylim(*ylim)
+
+    if yscale is not None:
+        plt.yscale(yscale)
+
+    plt.grid(alpha=0.3)
+    plt.legend()
+
+    save_plot(output_dir, output)
+
+
+# ===========================================================================
+# Specific data functions
+# ===========================================================================
+
+def vivify_percentage(stat):
+    return stat.percent.avg.vivify_time.avg.solve_time
+
+
+def scheduled(stat):
+    return stat.avg.vivify_sched
+
+def scheduled_per_vivify_second(stat):
+    if stat.percent.avg.vivify_time.avg.busy_time <= 0:
+        return 0
+
+    return (
+        stat.avg.vivify_sched
+        / stat.percent.avg.vivify_time.avg.busy_time
+    )
+
+def vivified(stat):
+    return stat.avg.vivified
+
+def vivified_per_vivify_second(stat):
+    if stat.avg.vivify_time <= 0:
+        return 0
+
+    return stat.avg.vivified / stat.avg.vivify_time
+
+
+def strengthened_per_vivify_second(stat):
+    if stat.avg.vivify_time <= 0:
+        return 0
+
+    return 100 * stat.avg.vivify_strs / stat.avg.vivify_time
+
+
+def subsumed_per_vivify_second(stat):
+    if stat.avg.vivify_time <= 0:
+        return 0
+
+    return 100 * stat.avg.vivify_subs / stat.avg.vivify_time
+
+
+def normalized_subsumed(stat):
+    x = vivify_percentage(stat)
+
+    if x <= 0:
+        return 0
+
+    return stat.avg.subsumed / (1 - x / 100)
+
+
+def instance_solve_times(stat):
+    return np.array([
+        x.busy_time
+        for x in stat.instance_stats
+        if x.result != st.RESULT.UNKOWN
+    ])
+
+
+# ===========================================================================
+# Solver groups
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# These are the important configuration knobs.
+#
+# '*' is accepted as shorthand for '.*'.
+#
+# For example:
+#
+#     "*_dist"
+#
+# matches:
+#
+#     2024_CaDiCaL_dist_v1%
+#     2024_CaDiCaL_dist_v2%
+#     2025_CaDiCaL_dist_v10%
+#
+# ---------------------------------------------------------------------------
+#
+# BASE_SOLVERS = SolverGroup(
+#     name="CaDiCaL",
+#     pattern=r"yyyy_CaDiCaL_v\d+%",
+# )
+#
+# DIST_SOLVERS = SolverGroup(
+#     name="CaDiCaL-dist",
+#     pattern=r"yyyy_CaDiCaL_dist_v\d+%",
+# )
+
+
+# If the year is actually variable, e.g. 2024, 2025, ...
+# use this instead:
+
+BASE_SOLVERS = SolverGroup(
+    name="CaDiCaL",
+    pattern=r"\d{4}_CaDiCaL",
+)
+
+DIST_SOLVERS = SolverGroup(
+    name="CaDiCaL-dist",
+    pattern=r"\d{4}_CaDiCaL_dist",
+)
+
+DEDICATED_SOLVERS = SolverGroup(
+    name="CaDiCaL",
+    pattern=r"\d{4}_CaDiCaL_v\d+%",
+)
+
+DEDICATED_DIST_SOLVERS = SolverGroup(
+    name="CaDiCaL-dist",
+    pattern=r"\d{4}_CaDiCaL_dist_v\d+%",
+)
+
+DEDICATED_DIST_SUBSUME_SOLVERS = SolverGroup(
+    name="CaDiCaL-dist",
+    pattern=r"\d{4}_CaDiCaL_dist_v\d+%",
+)
+
+
+# ===========================================================================
+# Main
+# ===========================================================================
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("results", type=Path)
     parser.add_argument("out_dir", type=Path)
     args = parser.parse_args()
-    def cadical_sort_key(stat):
-        name = stat.solver_name
 
-        match = re.match(r"^(CaDiCaL)(.*)$", name)
-        if not match:
-            return (name,)
+    stats = get_stats(args.results)
 
-        suffix = match.group(2)
+    # =======================================================================
+    # Configure the solvers for each plot here.
+    #
+    # A plot may have one or multiple groups.
+    #
+    # Examples:
+    #
+    # groups=[
+    #     SolverGroup("normal", r"*CaDiCaL_v\d+%", fit="linear"),
+    #     SolverGroup("dist", r"*CaDiCaL_dist_v\d+%", fit="inverse"),
+    # ]
+    #
+    # =======================================================================
 
-        if suffix == "":
-            return (0, 0)
-        if suffix == "-":
-            return (1, 0)
-        m = re.fullmatch(r"_v(\d+\.?\d*)%", suffix)
-        if m:
-            return (2, float(m.group(1)))
+    # -----------------------------------------------------------------------
+    # CDF
+    # -----------------------------------------------------------------------
 
-        if suffix.startswith("+"):
-            m = re.search(r"_v(\d+)%", suffix)
-            if m:
-                return (3, int(m.group(1)))
-            return (3, 0)
+    def valid_solve_times(stat):
+        times = instance_solve_times(stat)
+        return times[times > 0]
 
-        return (4, suffix)
+    def cdf_x(stat):
+        return np.sort(valid_solve_times(stat))
 
-    stats = sorted(
-        st.getStats(args.results),
-        key=cadical_sort_key,
+    def cdf_y(stat):
+        times = valid_solve_times(stat)
+        return np.arange(1, len(times) + 1)
+
+    plot_steps(
+        stats,
+        args.out_dir,
+        x=cdf_x,
+        y=cdf_y,
+        title="cumulative solved instances over time",
+        xlabel="solve time (seconds)",
+        ylabel="number of instances solved (time <= x)",
+        output="cdf.svg",
+        unique_styles=True,
     )
 
-    ##########################
-    # Plot vivified vs busy time 
-    #########################
-    # plt.figure(figsize=(8, 6))
-    # for s in stats:
-    #     if s.solver_name == "CaDiCaL-":
-    #         continue
-    #
-    #     ys = np.array([x.vivified for x in s.instance_stats if x.result != st.RESULT.UNKOWN])
-    #     xs = np.array([y.busy_time for y in s.instance_stats if y.result != st.RESULT.UNKOWN])
-    #
-    #     plt.scatter(xs, ys, s=2, label=s.solver_name)
-    #
-    #     # Filter out non-positive values for log safety
-    #     mask = (xs > 0) & (ys > 0)
-    #     x_valid = xs[mask]
-    #     y_valid = ys[mask]
-    #
-    #     if len(x_valid) == 0:
-    #         continue
-    #
-    #     # np.polyfit fits y vs log(x)
-    #     poly = np.polynomial.Polynomial.fit(x_valid, y_valid, deg=3)
-    #
-    #     # 2. Generate smooth curve points for plotting
-    #     x_line = np.linspace(x_valid.min(), x_valid.max(), 200)
-    #     y_line = poly(x_line)
-    #
-    #     plt.plot(
-    #         x_line,
-    #         y_line,
-    #         linestyle="--",
-    #         linewidth=2,
-    #         label=f"Log fit ({s.solver_name})"
-    #     )
-    #
-    # plt.ylabel("Vivified clauses (average per solver thread)")
-    # plt.xlabel("busy time")
-    # plt.yscale("log")
-    # # plt.xscale("log")
-    # plt.title("Vivified clauses vs. busy time")
-    #
-    # plt.legend()
-    # plt.grid(alpha=0.3)
-    # plt.tight_layout()
-    # plt.savefig(args.out_dir  / "vivify_over_time.svg")
-    # plt.close()
-
-    ##########################
-    # Plot percent vivify time vs busy time 
-    #########################
-    # plt.figure(figsize=(8, 6))
-    # for s in stats:
-    #     ys = np.array([100 * x.vivify_time / x.busy_time if x.busy_time > 0 else 0 for x in s.instance_stats])
-    #     xs = np.array([y.busy_time for y in s.instance_stats])
-    #
-    #     plt.scatter(xs, ys, s=2, label=s.solver_name)
-    #     a, b = np.polynomial.Polynomial.fit(x_valid, y_valid, deg=1)
-    #
-    #     # 2. Generate smooth curve points for plotting
-    #     x_line = np.linspace(x_valid.min(), x_valid.max(), 200)
-    #     y_line = a * np.log(x_line) + b
-    #     #
-    #     # plt.plot(
-    #     #     x_line,
-    #     #     y_line,
-    #     #     linestyle="--",
-    #     #     linewidth=2,
-    #     #     label=f"Log fit ({s.solver_name})"
-    #     # )
-    #
-    # plt.ylabel("% time spend Vivifying (avg per solver thread)")
-    # plt.xlabel("busy time")
-    # # plt.yscale("log")
-    # # plt.xscale("log")
-    # plt.title("Vivified clauses vs. busy time")
-    #
-    # plt.legend()
-    # plt.grid(alpha=0.3)
-    # plt.tight_layout()
-    # plt.savefig(args.out_dir / "vivify_percent_over_time.svg")
-    # plt.close()
-
-    ##########################
-    # cdf
-    #########################
-    plt.figure(figsize=(8, 6))
-    for s in stats:
-        solve_times = np.array([x.busy_time for x in s.instance_stats if x.result != st.RESULT.UNKOWN ])
-        valid_times = solve_times[solve_times > 0]
-        if len(valid_times) == 0:
-            continue
-
-        xs = np.sort(valid_times)
-        ys = np.arange(1, len(xs) + 1)
-        plt.plot(xs, ys, label=s.solver_name, drawstyle="steps-post", linewidth=1)
-
-    plt.xlabel("Solve Time / Busy Time (seconds)")
-    plt.ylabel("Number of Instances Solved (time <= x)")
-    plt.title("Cumulative Solved Instances over Time")
-    
-    plt.grid(alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(args.out_dir / "cdf.svg")
-    plt.ylim(200, None)
-    plt.savefig(args.out_dir / "cdf_zoom_y200.svg")
-    plt.close()
-
-    ##########################
-    # scheduled over busy_time
-    #########################
-    plt.figure(figsize=(8, 6))
-    for s in stats:
-        # if "+" in s.solver_name:
-        #     continue
-        busy_times = np.array([x.busy_time for x in s.instance_stats])
-        if len(busy_times) == 0:
-            continue
-
-        sched = np.array([x.vivify_sched for x in s.instance_stats])
-        if len(sched) == 0:
-            continue
-
-        xs = np.sort(busy_times)
-        ys = np.sort(sched)
-        plt.plot(xs, ys, label=s.solver_name, drawstyle="steps-post", linewidth=1)
-
-    plt.xlabel("Busy Time (s)")
-    plt.ylabel("Number of Instances Scheduled")
-    plt.yscale("log")
-    plt.title("number of Scheduled Clauses over solve time")
-    
-    plt.grid(alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(args.out_dir / "sched_over_busy_time.svg")
-    plt.close()
-
-
-    ##########################
-    # sched over busy_time
-    #########################
-    xs = []
-    ys = []
-    max_threshold=0
-    plt.figure(figsize=(8, 6))
-    for s in stats:
-        # if "+" in s.solver_name:
-        #     continue
-
-        x = s.percent.avg.vivify_time.avg.busy_time
-        y = s.avg.vivify_sched / x if x > 0 else 0
-        print(x, y, s.solver_name)
-
-        if s.solver_name == "CaDiCaL" or s.solver_name == "2024_CaDiCaL":
-            max_threshold = y
-        else:
-            if "v" in s.solver_name:
-                xs.append(x)
-                ys.append(y)
-
-        plt.scatter(x, y, label=s.solver_name)
-
-        if "-" in s.solver_name:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 5),
-                textcoords="offset points",
-                fontsize=8,
-            )
-        else:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, -5),
-                textcoords="offset points",
-                fontsize=8,
-            )
-
-
-    # plt.axhline(max_threshold, color="red", ls="--", lw=2, label="Maximum capacity")
-
-    xs = np.array(xs)
-    ys = np.array(ys)
-    mask = xs > 0
-    xs = xs[mask]
-    ys = ys[mask]
-    # 1/x model
-    def inverse_fit(x, a, b):
-        return a / x + b
-    params, _ = curve_fit(inverse_fit, xs, ys)
-    a, b = params
-    x_fit = np.linspace(0.01, 100, 500)
-    y_fit = inverse_fit(x_fit, a, b)
-    # plt.scatter(xs, ys, label="data")
-    plt.plot(
-        x_fit,
-        y_fit,
-        label=f"fit: y={a:.2f}/x + {b:.2f}",
+    plot_steps(
+        stats,
+        args.out_dir,
+        x=cdf_x,
+        y=cdf_y,
+        title="cumulative solved instances over time",
+        xlabel="solve time (seconds)",
+        ylabel="number of instances solved (time <= x)",
+        ylim=[200],
+        output="cdf_zoom_y200.svg",
+        unique_styles=True,
     )
 
+    # -----------------------------------------------------------------------
+    # SAT CDF
+    # -----------------------------------------------------------------------
 
-    # Shade infeasible region
-    # plt.fill_between(
-    #     np.linspace(0, 100, 500),
-    #     max_threshold,
-    #     5000000,
-    #     color="tab:red",
-    #     alpha=0.15,
-    # )
-    # plt.text(
-    #     5,
-    #     max_threshold * 1.05,
-    #     "approximately max capacity",
-    #     color="tab:red",
-    # )
-    plt.xlabel("vivify time %")
-    plt.ylabel("scheduled clauses per vivify sec")
-    plt.xlim(0, max(xs) * 1.2)
-    plt.ylim(0, max_threshold * 1.2)
-    # plt.yscale("log")
-    plt.title("scheduled clauses over vivify time")
-    
-    plt.grid(alpha=0.3)
-    # plt.legend()
-    plt.tight_layout()
-    plt.savefig(args.out_dir / "sched_per_vivi_sec.svg")
-    plt.close()
+    def valid_sat_solve_times(stat):
+        times = np.array([
+            x.busy_time
+            for x in stat.instance_stats
+            if x.result == st.RESULT.SAT
+        ])
+        return times[times > 0]
 
-    ##########################
-    # vivified over vivi_time
-    #########################
-    xs = []
-    ys = []
-    plt.figure(figsize=(8, 6))
-    for s in stats:
-        # if "+" in s.solver_name:
-        #     continue
-            
-        x = s.percent.avg.vivify_time.avg.busy_time
-        y = s.avg.vivified / s.avg.vivify_time if s.avg.vivify_time > 0 else 0
+    def cdf_x_sat(stat):
+        return np.sort(valid_sat_solve_times(stat))
 
-        xs.append(x)
-        ys.append(y)
+    def cdf_y_sat(stat):
+        times = valid_sat_solve_times(stat)
+        return np.arange(1, len(times) + 1)
 
-        plt.scatter(x, y, label=s.solver_name)
+    plot_steps(
+        stats,
+        args.out_dir,
+        x=cdf_x_sat,
+        y=cdf_y_sat,
+        title="cumulative solved sat instances over time",
+        xlabel="solve time (seconds)",
+        ylabel="number of instances solved (time <= x)",
+        output="cdf_sat.svg",
+        unique_styles=True,
+    )
 
-        if "-" in s.solver_name:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 5),
-                textcoords="offset points",
-                fontsize=8,
-            )
-        else:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 2),
-                textcoords="offset points",
-                fontsize=8,
-            )
+    plot_steps(
+        stats,
+        args.out_dir,
+        x=cdf_x_sat,
+        y=cdf_y_sat,
+        title="cumulative solved sat instances over time",
+        xlabel="solve time (seconds)",
+        ylabel="number of instances solved (time <= x)",
+        ylim=[100],
+        output="cdf_sat_zoom_y100.svg",
+        unique_styles=True,
+    )
 
-    plt.xlabel("vivify time %")
-    plt.ylabel("vivified clauses per vivify sec")
-    plt.xlim(0, max(xs) * 1.2)
-    plt.ylim(0, max(ys) * 1.3)
-    # plt.yscale("log")
-    plt.title("vivified clauses over vivify time")
-    
-    plt.grid(alpha=0.3)
-    # plt.legend()
-    plt.tight_layout()
-    plt.savefig(args.out_dir / "vivified_per_vivi_sec.svg")
-    plt.close()
+    # -----------------------------------------------------------------------
+    # UNSAT CDF
+    # -----------------------------------------------------------------------
 
-    ##########################
-    # vivify strs over vivi_time
-    #########################
-    xs = []
-    ys = []
-    plt.figure(figsize=(8, 6))
-    for s in stats:
-        # if "+" in s.solver_name:
-        #     continue
-            
-        x = s.percent.avg.vivify_time.avg.busy_time
-        y = s.avg.vivify_strs
- 
-        xs.append(x)
-        ys.append(y)
+    def valid_unsat_solve_times(stat):
+        times = np.array([
+            x.busy_time
+            for x in stat.instance_stats
+            if x.result == st.RESULT.UNSAT
+        ])
+        return times[times > 0]
 
-        plt.scatter(x, y, label=s.solver_name)
+    def cdf_x_unsat(stat):
+        return np.sort(valid_unsat_solve_times(stat))
 
-        if "-" in s.solver_name:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 5),
-                textcoords="offset points",
-                fontsize=8,
-            )
-        else:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 2),
-                textcoords="offset points",
-                fontsize=8,
-            )
+    def cdf_y_unsat(stat):
+        times = valid_unsat_solve_times(stat)
+        return np.arange(1, len(times) + 1)
 
-    plt.xlabel("vivify time %")
-    plt.ylabel("strenghened clauses")
-    plt.xlim(min(xs) * 0.9, max(xs) * 1.2)
-    plt.ylim(min(ys) * 0.8, max(ys) * 1.3)
-    # plt.yscale("log")
-    plt.title("strenghened clauses over vivification percentage")
-    
-    plt.grid(alpha=0.3)
-    # plt.legend()
-    plt.tight_layout()
-    plt.savefig(args.out_dir / "strs_per_vivi_sec.svg")
-    plt.close()
+    plot_steps(
+        stats,
+        args.out_dir,
+        x=cdf_x_unsat,
+        y=cdf_y_unsat,
+        title="cumulative solved unsat instances over time",
+        xlabel="solve time (seconds)",
+        ylabel="number of instances solved (time <= x)",
+        output="cdf_unsat.svg",
+        unique_styles=True,
+    )
 
-    ##########################
-    # vivify strs over vivi_time
-    #########################
-    xs = []
-    ys = []
-    plt.figure(figsize=(8, 6))
-    for s in stats:
-        # if "+" in s.solver_name:
-        #     continue
-            
-        x = s.percent.avg.vivify_time.avg.busy_time
-        # y = 100* (s.avg.vivify_strs / s.avg.vivify_checked if s.avg.vivify_checked > 0 else 0)
-        y = 100* (s.avg.vivify_strs / s.avg.vivify_time if s.avg.vivify_time > 0 else 0)
- 
-        if s.solver_name != "CaDiCaL":
-            if s.solver_name != "CaDiCaL-":
-                xs.append(x)
-                ys.append(y)
+    plot_steps(
+        stats,
+        args.out_dir,
+        x=cdf_x_unsat,
+        y=cdf_y_unsat,
+        title="cumulative solved unsat instances over time",
+        xlabel="solve time (seconds)",
+        ylabel="number of instances solved (time <= x)",
+        ylim=[100],
+        output="cdf_unsat_zoom_y100.svg",
+        unique_styles=True,
+    )
 
-        plt.scatter(x, y, label=s.solver_name)
+    # -----------------------------------------------------------------------
+    # Scheduled clauses over busy time
+    # -----------------------------------------------------------------------
 
-        if "-" in s.solver_name:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 5),
-                textcoords="offset points",
-                fontsize=8,
-            )
-        else:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 2),
-                textcoords="offset points",
-                fontsize=8,
-            )
-    # plt.axhline(max_threshold, color="red", ls="--", lw=2, label="Maximum capacity")
+    def scheduled_x(stat):
+        return np.sort(np.array([
+            x.busy_time
+            for x in stat.instance_stats
+            if x.result != st.RESULT.UNKOWN
+        ]))
+
+    def scheduled_y(stat):
+        return np.sort(np.array([
+            x.vivify_sched
+            for x in stat.instance_stats
+            if x.result != st.RESULT.UNKOWN
+        ]))
+
+    plot_steps(
+        stats,
+        args.out_dir,
+        x=scheduled_x,
+        y=scheduled_y,
+        title="Scheduled clauses per solve time",
+        xlabel="solve time (seconds)",
+        ylabel="number of scheduled clauses",
+        output="sched_over_busy_time.svg",
+        drawstyle="default",
+    )
+
+    # -----------------------------------------------------------------------
+    # Subsumed clauses over busy time
+    # -----------------------------------------------------------------------
+
+    def subs_y(stat):
+        return np.sort(np.array([
+            x.vivify_subs
+            for x in stat.instance_stats
+            if x.result != st.RESULT.UNKOWN
+        ]))
+
+    plot_steps(
+        stats,
+        args.out_dir,
+        x=scheduled_x,
+        y=subs_y,
+        title="subsumed clauses per solve time",
+        xlabel="solve time (seconds)",
+        ylabel="number of subsumed clauses",
+        output="subs_over_busy_time.svg",
+        drawstyle="default",
+    )
+
+    # -----------------------------------------------------------------------
+    # Strengthened clauses over busy time
+    # -----------------------------------------------------------------------
+
+    def strs_y(stat):
+        return np.sort(np.array([
+            x.vivify_strs
+            for x in stat.instance_stats
+            if x.result != st.RESULT.UNKOWN
+        ]))
+
+    plot_steps(
+        stats,
+        args.out_dir,
+        x=scheduled_x,
+        y=strs_y,
+        title="strengthened clauses per solve time",
+        xlabel="solve time (seconds)",
+        ylabel="number of strengthened clauses",
+        output="strs_over_busy_time.svg",
+        drawstyle="default",
+    )
+
+    # =======================================================================
+    # Scatter plots
+    # =======================================================================
+
+    # -----------------------------------------------------------------------
+    # Scheduled clauses per vivify second
     #
-    # # 1/x model
-    # def inverse_fit(x, a, b):
-    #     return a / x + b
-    # params, _ = curve_fit(inverse_fit, xs, ys)
-    # a, b = params
-    # x_fit = np.linspace(0.01, 100, 500)
-    # y_fit = inverse_fit(x_fit, a, b)
-    # # plt.scatter(xs, ys, label="data")
-    # plt.plot(
-    #     x_fit,
-    #     y_fit,
-    #     label=f"fit: y={a:.2f}/x + {b:.2f}",
-    # )
+    # Here we compare:
+    #
+    #   yyyy_CaDiCaL_vN%
+    #   yyyy_CaDiCaL_dist_vN%
+    #
+    # and fit each group independently.
+    # -----------------------------------------------------------------------
 
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=scheduled_per_vivify_second,
+        title="scheduled clauses",
+        xlabel="vivify time %",
+        ylabel="scheduled clauses per vivify sec",
+        output="sched_per_vivi_sec.svg",
+    )
 
-    # Shade infeasible region
-    # plt.fill_between(
-    #     np.linspace(0, 100, 500),
-    #     max_threshold,
-    #     5000000,
-    #     color="tab:red",
-    #     alpha=0.15,
-    # )
-    # plt.text(
-    #     5,
-    #     max_threshold * 1.05,
-    #     "approximately max capacity",
-    #     color="tab:red",
-    # )
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=vivified_per_vivify_second,
+        title="vivified clauses",
+        xlabel="vivify time %",
+        ylabel="vivified clauses per vivify sec",
+        output="vivified_per_vivi_sec.svg",
+    )
 
-    plt.xlabel("vivify time %")
-    plt.ylabel("strengthened per second in ivification")
-    plt.xlim(0, max(xs) * 1.2)
-    plt.ylim(0, max(ys) * 1.3)
-    # plt.yscale("log")
-    plt.title("strenghened clauses per sec over percent vivification")
-    
-    plt.grid(alpha=0.3)
-    # plt.legend()
-    plt.savefig(args.out_dir / "efficiency_strs_per_vivi_sec.svg")
-    plt.close()
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_strs,
+        title="strengthened clauses",
+        xlabel="vivify time %",
+        ylabel="strengthened clauses",
+        output="strs_per_vivi_sec.svg",
+    )
 
-    ##########################
-    # subs over vivi_time
-    #########################
-    xs = []
-    ys = []
-    plt.figure(figsize=(8, 6))
-    for s in stats:
-        # if "+" in s.solver_name:
-        #     continue
-            
-        x = s.percent.avg.vivify_time.avg.busy_time
-        y = s.avg.vivify_subs
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=strengthened_per_vivify_second,
+        title="strengthened clauses per sec",
+        xlabel="vivify time %",
+        ylabel="strengthened per second in vivification",
+        output="strs_per_vivi_sec.svg",
+    )
 
-        xs.append(x)
-        ys.append(y)
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=subsumed_per_vivify_second,
+        title="subsumed clauses from vivification",
+        xlabel="vivify time %",
+        ylabel="subsumed clauses from vivification",
+        output="subs_per_vivi_sec.svg",
+    )
 
-        plt.scatter(x, y, label=s.solver_name)
+    #
+    # dedicated variant
+    #
 
-        if "-" in s.solver_name:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 5),
-                textcoords="offset points",
-                fontsize=8,
-            )
-        else:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 2),
-                textcoords="offset points",
-                fontsize=8,
-            )
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=scheduled,
+        title="scheduled clauses",
+        xlabel="vivify time %",
+        ylabel="scheduled clauses",
+        output="dedicated_sched.svg",
+        legend=False,
+        ylim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear"
+            ),
+            BASE_SOLVERS
+        ]
+    )
 
-    plt.xlabel("vivify time %")
-    plt.ylabel("subsumed clauses from vivification")
-    plt.xlim(min(xs) * 0.9, max(xs) * 1.2)
-    plt.ylim(min(ys) * 0.8, max(ys) * 1.3)
-    # plt.yscale("log")
-    plt.title("subsumed clauses from vivification over vivify percentage")
-    
-    plt.grid(alpha=0.3)
-    # plt.legend()
-    plt.tight_layout()
-    plt.savefig(args.out_dir / "subs_per_vivi_sec.svg")
-    plt.close()
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_checked,
+        title="checked clauses",
+        xlabel="vivify time %",
+        ylabel="checked clauses",
+        output="dedicated_checked.svg",
+        legend=False,
+        ylim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear"
+            ),
+            BASE_SOLVERS
+        ]
+    )
 
-    ##########################
-    # subsumed over vivi_time
-    #########################
-    xs = []
-    ys = []
-    plt.figure(figsize=(8, 6))
-    for s in stats:
-        if "+" in s.solver_name:
-            continue
-            
-        x = s.percent.avg.vivify_time.avg.busy_time
-        base = (s.avg.busy_time) / (s.avg.busy_time - s.avg.vivify_time) if s.avg.busy_time > 0 else 0
-        y = (s.avg.subsumed) / (1 - (x / 100)) if x > 0 else 0
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=vivified,
+        title="vivified clauses",
+        xlabel="vivify time %",
+        ylabel="vivified clauses",
+        output="dedicated_vivified.svg",
+        legend=False,
+        ylim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear"
+            ),
+            BASE_SOLVERS
+        ]
+    )
 
-        xs.append(x)
-        ys.append(y)
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_strs,
+        title="strengthened clauses",
+        xlabel="vivify time %",
+        ylabel="strengthened clauses",
+        output="dedicated_strs.svg",
+        legend=False,
+        ylim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear"
+            ),
+            BASE_SOLVERS
+        ]
+    )
 
-        plt.scatter(x, y, label=s.solver_name)
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_subs,
+        title="subsumed by vivification clauses",
+        xlabel="vivify time %",
+        ylabel="subsumed clauses",
+        output="dedicated_subs.svg",
+        legend=False,
+        ylim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear"
+            ),
+            BASE_SOLVERS,
+        ]
+    )
 
-        if "-" in s.solver_name:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 5),
-                textcoords="offset points",
-                fontsize=8,
-            )
-        else:
-            plt.annotate(
-                s.solver_name,
-                (x, y),
-                xytext=(4, 2),
-                textcoords="offset points",
-                fontsize=8,
-            )
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=strengthened_per_vivify_second,
+        title="strengthened clauses per sec",
+        xlabel="vivify time %",
+        ylabel="strengthened per second in vivification",
+        output="dedicated_strs_per_vivi_sec.svg",
+        legend=False,
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear"
+            ),
+            BASE_SOLVERS,
+        ]
+    )
 
-    plt.xlabel("vivify time %")
-    plt.ylabel("subsumed clauses per vivify sec")
-    plt.xlim(min(xs) * 0.9, max(xs) * 1.2)
-    plt.ylim(min(ys) * 0.8, max(ys) * 1.3)
-    # plt.yscale("log")
-    plt.title("subsumed clauses over vivify time")
-    
-    plt.grid(alpha=0.3)
-    # plt.legend()
-    plt.tight_layout()
-    plt.savefig(args.out_dir / "subsumed_per_vivi_sec.svg")
-    plt.close()
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=subsumed_per_vivify_second,
+        title="subsumed clauses from vivification",
+        xlabel="vivify time %",
+        ylabel="subsumed clauses from vivification",
+        output="dedicated_subs_per_vivi_sec.svg",
+        legend=False,
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear"
+            ),
+            BASE_SOLVERS,
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_reduced",
+            ),
+        ]
+    )
 
-    #####
-    #print the number of scheduled clauses
-    for s in stats:
-        if (s.solver_name == "2024_CaDiCaL" or s.solver_name == "2024_CaDiCaL_dist") :
-            print(s.solver_name, s.avg.vivify_sched)
+    #
+    # dedicated distributed variant
+    #
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=scheduled,
+        title="",
+        xlabel="vivify time %",
+        ylabel="scheduled clauses",
+        output="dedicated_dist_sched.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0,13],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="linear",
+                rotation=-25,
+                va="top",
+            ),
+            BASE_SOLVERS,
+            DIST_SOLVERS
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_checked,
+        title="",
+        xlabel="vivify time %",
+        ylabel="checked clauses",
+        output="dedicated_dist_checked.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0, 13],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="log",
+                rotation=15,
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL",
+                va="top",
+            ),
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=vivified,
+        title="",
+        xlabel="vivify time %",
+        ylabel="vivified clauses",
+        output="dedicated_dist_vivified.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0,13],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="log",
+                va="top",
+            ),
+            BASE_SOLVERS,
+            DIST_SOLVERS
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_strs,
+        title="",
+        xlabel="vivify time %",
+        ylabel="strengthened clauses",
+        output="dedicated_dist_strs.svg",
+        legend=False,
+        ylim=[0, 40000],
+        xlim=[0, 13],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="log",
+                rotation=15,
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL",
+                va="top",
+            ),
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_subs,
+        title="",
+        xlabel="vivify time %",
+        ylabel="by vivification subsumed clauses",
+        output="dedicated_dist_subs.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0,13],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear",
+                va="top"
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="inverse",
+                va="top"
+            ),
+            BASE_SOLVERS,
+            DIST_SOLVERS
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=strengthened_per_vivify_second,
+        title="",
+        xlabel="vivify time %",
+        ylabel="strengthened per second in vivification",
+        output="dedicated_dist_strs_per_vivi_sec.svg",
+        legend=False,
+        xlim=[0, 13],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear",
+                rotation=15
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="inverse"
+            ),
+            BASE_SOLVERS,
+            DIST_SOLVERS
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=subsumed_per_vivify_second,
+        title="",
+        xlabel="vivify time %",
+        ylabel="by vivification subsumed clauses per second in vivification",
+        output="dedicated_dist_subs_per_vivi_sec.svg",
+        legend=False,
+        xlim=[0,13],
+        groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear",
+                rotation=15
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="inverse"
+            ),
+            BASE_SOLVERS,
+            DIST_SOLVERS
+        ]
+    )
+
+    #
+    # dedicated distributed subsume variant
+    #
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=scheduled,
+        title="",
+        xlabel="vivify time %",
+        ylabel="scheduled clauses",
+        output="dedicated_dist_subs_sched.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0,13],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL_dist_vs\d+\%",
+                fit="inverse",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="linear",
+                rotation=-25,
+                va="top",
+            ),
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_checked,
+        title="",
+        xlabel="vivify time %",
+        ylabel="checked clauses",
+        output="dedicated_dist_subs_checked.svg",
+        legend=False,
+        xlim=[0, 13],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL_dist_vs\d+\%",
+                fit="log",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="log",
+                va="top",
+            ),
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=vivified,
+        title="",
+        xlabel="vivify time %",
+        ylabel="vivified clauses",
+        output="dedicated_dist_subs_vivified.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0,13],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL_dist_vs\d+\%",
+                fit="log",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="log",
+                va="top",
+            ),
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_strs,
+        title="",
+        xlabel="vivify time %",
+        ylabel="strengthened clauses",
+        output="dedicated_dist_subs_strs.svg",
+        legend=False,
+        xlim=[0, 13],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL_dist_vs\d+\%",
+                fit="log",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="log",
+                va="top",
+            ),
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_subs,
+        title="",
+        xlabel="vivify time %",
+        ylabel="by vivification subsumed clauses",
+        output="dedicated_dist_subs_subs.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0,13],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL_dist_vs\d+\%",
+                fit="inverse",
+                va="top"
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="inverse",
+            ),
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=strengthened_per_vivify_second,
+        title="",
+        xlabel="vivify time %",
+        ylabel="strengthened per second in vivification",
+        output="dedicated_dist_subs_strs_per_vivi_sec.svg",
+        legend=False,
+        xlim=[0, 13],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL_dist_vs\d+\%",
+                fit="inverse",
+                va="top"
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="inverse"
+            ),
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=subsumed_per_vivify_second,
+        title="",
+        xlabel="vivify time %",
+        ylabel="by vivification subsumed clauses per second in vivification",
+        output="dedicated_dist_subs_subs_per_vivi_sec.svg",
+        legend=False,
+        xlim=[0,13],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL_dist_vs\d+\%",
+                fit="inverse",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="inverse"
+            ),
+        ]
+    )
+
+    #
+    # dedicated distributed variant + normal
+    #
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=scheduled,
+        title="",
+        xlabel="vivify time %",
+        ylabel="scheduled clauses",
+        output="normal_dedicated_dist_sched.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL\+_dist_v\d+\%",
+                fit="inverse",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="linear",
+                rotation=-25,
+                va="top",
+            ),
+            BASE_SOLVERS
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_checked,
+        title="",
+        xlabel="vivify time %",
+        ylabel="checked clauses",
+        output="normal_dedicated_dist_checked.svg",
+        legend=False,
+        xlim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL\+_dist_v\d+\%",
+                fit="log",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="log",
+                va="top",
+            ),
+            BASE_SOLVERS
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=vivified,
+        title="",
+        xlabel="vivify time %",
+        ylabel="vivified clauses",
+        output="normal_dedicated_dist_vivified.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL\+_dist_v\d+\%",
+                fit="log",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="log",
+                va="top",
+            ),
+            BASE_SOLVERS
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_strs,
+        title="",
+        xlabel="vivify time %",
+        ylabel="strengthened clauses",
+        output="normal_dedicated_dist_strs.svg",
+        legend=False,
+        xlim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL\+_dist_v\d+\%",
+                fit="log",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="log",
+                va="top",
+            ),
+            BASE_SOLVERS
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda s: s.avg.vivify_subs,
+        title="",
+        xlabel="vivify time %",
+        ylabel="by vivification subsumed clauses",
+        output="normal_dedicated_dist_subs.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL\+_dist_v\d+\%",
+                fit="inverse",
+                va="top"
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="inverse",
+            ),
+            BASE_SOLVERS
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=strengthened_per_vivify_second,
+        title="",
+        xlabel="vivify time %",
+        ylabel="strengthened per second in vivification",
+        output="normal_dedicated_dist_strs_per_vivi_sec.svg",
+        legend=False,
+        xlim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL\+_dist_v\d+\%",
+                fit="inverse",
+                va="top"
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="inverse"
+            ),
+            BASE_SOLVERS
+        ]
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=subsumed_per_vivify_second,
+        title="",
+        xlabel="vivify time %",
+        ylabel="by vivification subsumed clauses per second in vivification",
+        output="normal_dedicated_dist_subs_per_vivi_sec.svg",
+        legend=False,
+        xlim=[0],
+        groups=[
+            SolverGroup (
+                name="dedicated distributed subsume",
+                pattern=r"\d{4}_CaDiCaL\+_dist_vs\d+\%",
+                fit="inverse",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
+                fit="inverse"
+            ),
+            BASE_SOLVERS
+        ]
+    )
+
 
 if __name__ == "__main__":
     main()
