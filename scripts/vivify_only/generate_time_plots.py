@@ -403,6 +403,7 @@ def plot_steps(
     ylabel,
     output,
     groups=None,
+    average_solvers=None,
     yscale=None,
     xlim=None,
     ylim=None,
@@ -413,20 +414,41 @@ def plot_steps(
     Create a step plot.
 
     Each solver group is plotted separately.
+
+    Parameters
+    ----------
+    groups : iterable, optional
+        Solver groups to plot. Each group is expected to have a
+        ``pattern`` attribute.
+
+    average_solvers : iterable of tuple[str, str], optional
+        Pairs of solver names whose values should be averaged and
+        plotted as an additional curve.
+
+        Example:
+            average_solvers=[
+                ("solver_a", "solver_b"),
+                ("solver_c", "solver_d"),
+            ]
+
+        The two solvers in each pair must have matching x-values.
     """
 
     setup_plot(title, xlabel, ylabel)
 
     plotted = False
 
+    # Select the statistics to plot.
     if groups:
+        g_stats = []
         for group in groups:
-            g_stats = select_stats(stats, group.pattern)
+            g_stats.extend(select_stats(stats, group.pattern))
     else:
         g_stats = select_stats(stats, "*")
 
-    markers = ["o", "s", "^", "D", "v", "<", ">", "P", "X", "*", "h", "p"] 
+    markers = ["o", "s", "^", "D", "v", "<", ">", "P", "X", "*", "h", "p"]
     linestyles = ["-", "--", "-.", ":"]
+
     for i, stat in enumerate(g_stats):
         x_values = x(stat)
         y_values = y(stat)
@@ -434,11 +456,18 @@ def plot_steps(
         if len(x_values) == 0 or len(y_values) == 0:
             continue
 
-        style = {} 
-        if unique_styles: 
-            marker = markers[i % len(markers)] 
-            linestyle = linestyles[(i // len(markers)) % len(linestyles)] 
-            style.update( marker=marker, linestyle=linestyle, markersize=4, markevery=max(1, len(x_values) // 20), )
+        style = {}
+        if unique_styles:
+            marker = markers[i % len(markers)]
+            linestyle = linestyles[
+                (i // len(markers)) % len(linestyles)
+            ]
+            style.update(
+                marker=marker,
+                linestyle=linestyle,
+                markersize=4,
+                markevery=max(1, len(x_values) // 20),
+            )
 
         plt.plot(
             x_values,
@@ -450,6 +479,56 @@ def plot_steps(
         )
 
         plotted = True
+
+    # Plot averages of solver pairs.
+    if average_solvers:
+        stats_by_solver = {
+            stat.solver_name: stat
+            for stat in g_stats
+        }
+
+        for solver_a, solver_b in average_solvers:
+            stat_a = stats_by_solver.get(solver_a)
+            stat_b = stats_by_solver.get(solver_b)
+
+            if stat_a is None or stat_b is None:
+                continue
+
+            x_a = x(stat_a)
+            y_a = y(stat_a)
+            x_b = x(stat_b)
+            y_b = y(stat_b)
+
+            if len(x_a) == 0 or len(x_b) == 0:
+                continue
+
+            if x_a != x_b:
+                raise ValueError(
+                    f"Cannot average {solver_a} and {solver_b}: "
+                    "their x-values do not match."
+                )
+
+            if len(y_a) != len(y_b):
+                raise ValueError(
+                    f"Cannot average {solver_a} and {solver_b}: "
+                    "their y-values have different lengths."
+                )
+
+            y_avg = [
+                (value_a + value_b) / 2
+                for value_a, value_b in zip(y_a, y_b)
+            ]
+
+            plt.plot(
+                x_a,
+                y_avg,
+                label=f"{solver_a} + {solver_b} (avg)",
+                drawstyle=drawstyle,
+                linewidth=1,
+                linestyle="--",
+            )
+
+            plotted = True
 
     if not plotted:
         plt.close()
@@ -468,7 +547,6 @@ def plot_steps(
     plt.legend()
 
     save_plot(output_dir, output)
-
 
 # ===========================================================================
 # Specific data functions
@@ -622,6 +700,37 @@ def main():
     # CDF
     # -----------------------------------------------------------------------
 
+    groups=[
+            SolverGroup (
+                name="dedicated",
+                pattern=r"\d{4}_CaDiCaL_v\d+\%",
+                fit="linear",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"pdCad_*",
+                fit="log",
+                va="top",
+            ),
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"pdCad-L_*",
+                fit="log",
+                va="top",
+            ),
+            SolverGroup (
+                name="cadical",
+                pattern=r"Cad",
+                va="top",
+            ),
+            SolverGroup (
+                name="partitioned",
+                pattern="pCad*",
+                va="top",
+            ),        
+        ]
+
     def valid_solve_times(stat):
         times = instance_solve_times(stat)
         return times[times > 0]
@@ -643,6 +752,7 @@ def main():
         ylabel="number of instances solved (time <= x)",
         output="cdf.svg",
         unique_styles=True,
+        groups=groups
     )
 
     plot_steps(
@@ -656,6 +766,7 @@ def main():
         ylim=[200],
         output="cdf_zoom_y200.svg",
         unique_styles=True,
+        groups=groups
     )
 
     # -----------------------------------------------------------------------
@@ -893,175 +1004,10 @@ def main():
     )
 
     #
-    # dedicated variant
-    #
-
-    plot_scatter(
-        stats,
-        args.out_dir,
-        x=vivify_percentage,
-        y=scheduled,
-        title="scheduled clauses",
-        xlabel="vivify time %",
-        ylabel="scheduled clauses",
-        output="dedicated_sched.svg",
-        legend=False,
-        ylim=[0],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear"
-            ),
-            BASE_SOLVERS
-        ]
-    )
-
-    plot_scatter(
-        stats,
-        args.out_dir,
-        x=vivify_percentage,
-        y=lambda s: s.avg.vivify_checked,
-        title="checked clauses",
-        xlabel="vivify time %",
-        ylabel="checked clauses",
-        output="dedicated_checked.svg",
-        legend=False,
-        ylim=[0],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear"
-            ),
-            BASE_SOLVERS
-        ]
-    )
-
-    plot_scatter(
-        stats,
-        args.out_dir,
-        x=vivify_percentage,
-        y=vivified,
-        title="vivified clauses",
-        xlabel="vivify time %",
-        ylabel="vivified clauses",
-        output="dedicated_vivified.svg",
-        legend=False,
-        ylim=[0],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear"
-            ),
-            BASE_SOLVERS
-        ]
-    )
-
-    plot_scatter(
-        stats,
-        args.out_dir,
-        x=vivify_percentage,
-        y=lambda s: s.avg.vivify_strs,
-        title="strengthened clauses",
-        xlabel="vivify time %",
-        ylabel="strengthened clauses",
-        output="dedicated_strs.svg",
-        legend=False,
-        ylim=[0],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear"
-            ),
-            BASE_SOLVERS
-        ]
-    )
-
-    plot_scatter(
-        stats,
-        args.out_dir,
-        x=vivify_percentage,
-        y=lambda s: s.avg.vivify_subs,
-        title="subsumed by vivification clauses",
-        xlabel="vivify time %",
-        ylabel="subsumed clauses",
-        output="dedicated_subs.svg",
-        legend=False,
-        ylim=[0],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear"
-            ),
-            BASE_SOLVERS,
-        ]
-    )
-
-    plot_scatter(
-        stats,
-        args.out_dir,
-        x=vivify_percentage,
-        y=strengthened_per_vivify_second,
-        title="strengthened clauses per sec",
-        xlabel="vivify time %",
-        ylabel="strengthened per second in vivification",
-        output="dedicated_strs_per_vivi_sec.svg",
-        legend=False,
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear"
-            ),
-            BASE_SOLVERS,
-        ]
-    )
-
-    plot_scatter(
-        stats,
-        args.out_dir,
-        x=vivify_percentage,
-        y=subsumed_per_vivify_second,
-        title="subsumed clauses from vivification",
-        xlabel="vivify time %",
-        ylabel="subsumed clauses from vivification",
-        output="dedicated_subs_per_vivi_sec.svg",
-        legend=False,
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear"
-            ),
-            BASE_SOLVERS,
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_reduced",
-            ),
-        ]
-    )
-
-    #
     # dedicated distributed variant
     #
 
-    plot_scatter(
-        stats,
-        args.out_dir,
-        x=vivify_percentage,
-        y=scheduled,
-        title="",
-        xlabel="vivify time %",
-        ylabel="scheduled clauses",
-        output="dedicated_dist_sched.svg",
-        legend=False,
-        ylim=[0],
-        xlim=[0,13],
-        groups=[
+    groups=[
             SolverGroup (
                 name="dedicated",
                 pattern=r"\d{4}_CaDiCaL_v\d+\%",
@@ -1070,14 +1016,41 @@ def main():
             ),
             SolverGroup (
                 name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
-                fit="linear",
-                rotation=-25,
+                pattern=r"pdCad_*",
+                fit="log",
                 va="top",
             ),
-            BASE_SOLVERS,
-            DIST_SOLVERS
+            SolverGroup (
+                name="dedicated distributed",
+                pattern=r"pdCad-L_*",
+                fit="log",
+                va="top",
+            ),
+            SolverGroup (
+                name="cadical",
+                pattern=r"Cad",
+                va="top",
+            ),
+            SolverGroup (
+                name="partitioned",
+                pattern="pCad*",
+                va="top",
+            ),        
         ]
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=scheduled,
+        title="",
+        xlabel="vivify time %",
+        ylabel="scheduled clauses",
+        output="all_sched.svg",
+        legend=False,
+        ylim=[0],
+        xlim=[0,13],
+        groups=groups
     )
 
     plot_scatter(
@@ -1088,35 +1061,11 @@ def main():
         title="",
         xlabel="vivify time %",
         ylabel="checked clauses",
-        output="dedicated_dist_checked.svg",
+        output="all_checked.svg",
         legend=False,
         ylim=[0],
         xlim=[0, 13],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear",
-                va="top",
-            ),
-            SolverGroup (
-                name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
-                fit="log",
-                rotation=15,
-                va="top",
-            ),
-            SolverGroup (
-                name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL_dist",
-                va="top",
-            ),
-            SolverGroup (
-                name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL",
-                va="top",
-            ),
-        ]
+        groups=groups   
     )
 
     plot_scatter(
@@ -1127,26 +1076,11 @@ def main():
         title="",
         xlabel="vivify time %",
         ylabel="vivified clauses",
-        output="dedicated_dist_vivified.svg",
+        output="all_vivified.svg",
         legend=False,
         ylim=[0],
         xlim=[0,13],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear",
-                va="top",
-            ),
-            SolverGroup (
-                name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
-                fit="log",
-                va="top",
-            ),
-            BASE_SOLVERS,
-            DIST_SOLVERS
-        ]
+        groups=groups
     )
 
     plot_scatter(
@@ -1157,121 +1091,70 @@ def main():
         title="",
         xlabel="vivify time %",
         ylabel="strengthened clauses",
-        output="dedicated_dist_strs.svg",
+        output="all_strs.svg",
         legend=False,
-        ylim=[0, 40000],
+        ylim=[0],
         xlim=[0, 13],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear",
-                va="top",
-            ),
-            SolverGroup (
-                name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
-                fit="log",
-                rotation=15,
-                va="top",
-            ),
-            SolverGroup (
-                name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL_dist",
-                va="top",
-            ),
-            SolverGroup (
-                name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL",
-                va="top",
-            ),
-        ]
+        groups=groups
     )
 
     plot_scatter(
         stats,
         args.out_dir,
         x=vivify_percentage,
-        y=lambda s: s.avg.vivify_subs,
+        y=lambda s: s.avg.vivify_rat,
         title="",
         xlabel="vivify time %",
         ylabel="by vivification subsumed clauses",
-        output="dedicated_dist_subs.svg",
+        output="all_rat.svg",
         legend=False,
         ylim=[0],
         xlim=[0,13],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear",
-                va="top"
-            ),
-            SolverGroup (
-                name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
-                fit="inverse",
-                va="top"
-            ),
-            BASE_SOLVERS,
-            DIST_SOLVERS
-        ]
+        groups=groups
     )
+
+    ### effektiveness
 
     plot_scatter(
         stats,
         args.out_dir,
         x=vivify_percentage,
-        y=strengthened_per_vivify_second,
+        y=lambda x : x.avg.vivified / x.avg.vivify_checked,
         title="",
         xlabel="vivify time %",
         ylabel="strengthened per second in vivification",
-        output="dedicated_dist_strs_per_vivi_sec.svg",
+        output="all_eff_vivify.svg",
         legend=False,
         xlim=[0, 13],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear",
-                rotation=15
-            ),
-            SolverGroup (
-                name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
-                fit="inverse"
-            ),
-            BASE_SOLVERS,
-            DIST_SOLVERS
-        ]
+        groups=groups
     )
 
     plot_scatter(
         stats,
         args.out_dir,
         x=vivify_percentage,
-        y=subsumed_per_vivify_second,
+        y=lambda x : x.avg.vivify_strs / x.avg.vivify_checked,
         title="",
         xlabel="vivify time %",
-        ylabel="by vivification subsumed clauses per second in vivification",
-        output="dedicated_dist_subs_per_vivi_sec.svg",
+        ylabel="strengthened per second in vivification",
+        output="all_eff_strs.svg",
         legend=False,
-        xlim=[0,13],
-        groups=[
-            SolverGroup (
-                name="dedicated",
-                pattern=r"\d{4}_CaDiCaL_v\d+\%",
-                fit="linear",
-                rotation=15
-            ),
-            SolverGroup (
-                name="dedicated distributed",
-                pattern=r"\d{4}_CaDiCaL_dist_v\d+\%",
-                fit="inverse"
-            ),
-            BASE_SOLVERS,
-            DIST_SOLVERS
-        ]
+        xlim=[0, 13],
+        groups=groups
+    )
+
+    plot_scatter(
+        stats,
+        args.out_dir,
+        x=vivify_percentage,
+        y=lambda x : x.avg.vivify_rat / x.avg.vivify_checked,
+        title="",
+        xlabel="vivify time %",
+        ylabel="strengthened per second in vivification",
+        output="all_eff_rat.svg",
+        legend=False,
+        xlim=[0, 13],
+        groups=groups
     )
 
     #

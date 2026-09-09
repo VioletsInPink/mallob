@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from dataclasses import dataclass, field, fields, is_dataclass
 from tqdm import tqdm
+from statistics import mean
 import pickle
 
 def plotable(prop):
@@ -48,11 +49,13 @@ class InstanceStats:
     subsumed: float = field(default=0, metadata={"plotable": True})
     subsume_time: float = field(default=0, metadata={"plotable": True})
 
-    vivified: float = field(default=0, metadata={"plotable": True})
+    vivified_old: float = field(default=0, metadata={"plotable": True})
     vivify_strs: float = field(default=0, metadata={"plotable": True})
     vivify_subs: float = field(default=0, metadata={"plotable": True})
+    vivify_rat: float = field(default=0, metadata={"plotable": True})
     vivify_checked: float = field(default=0, metadata={"plotable": True})
     vivify_sched: float = field(default=0, metadata={"plotable": True})
+
     vivify_time_per_thread: float = field(default=0, metadata={"plotable": True})
     vivify_time: float = field(default=0, metadata={"plotable": True})
     solve_time_per_thread: float = field(default=0, metadata={"plotable": True})
@@ -67,6 +70,16 @@ class InstanceStats:
     vivi_prod_adm: float = field(default=0, metadata={"plotable": True})
     vivi_prod_drp: float = field(default=0, metadata={"plotable": True})
     vivi_prod_flt: float = field(default=0, metadata={"plotable": True})
+
+    @plotable
+    @property
+    def vivified(self):
+        return self.vivify_strs + self.vivify_rat 
+
+    @plotable
+    @property
+    def vivify_presubs(self):
+        return self.vivify_subs - self.vivify_rat 
 
     @plotable
     @property
@@ -114,7 +127,33 @@ class Stats:
     sat: int = field(default=0, metadata={"plotable": True})
     unsat: int = field(default=0, metadata={"plotable": True})
     par2: float = field(default=0, metadata={"plotable": True})
+    par1: float = field(default=0, metadata={"plotable":True})
  
+    @plotable
+    @property
+    def mean(self):
+        class InstanceMean:
+            def __init__(self, instances):
+                self.instances = instances
+
+            def __getattr__(self, name):
+                if not self.instances:
+                    raise AttributeError("No instance stats available")
+
+                if not hasattr(self.instances[0], name):
+                    raise AttributeError(
+                        f"{type(self.instances[0]).__name__} has no field '{name}'"
+                    )
+
+                values = [
+                    getattr(x, name)
+                    for x in self.instances
+                    if hasattr(x, name)
+                ]
+                return mean(values) if values else 0
+
+        return InstanceMean(self.instance_stats)
+
     @plotable
     @property
     def avg(self):
@@ -375,7 +414,7 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                         line
                     )
                     if m:
-                        stats.vivified += int(m.group(1))
+                        stats.vivified_old += int(m.group(1))
                         continue
 
                     m = re.search(
@@ -392,6 +431,14 @@ def get_cadical_vivi_stats(instance_dir: Path, stats: InstanceStats):
                     )
                     if m:
                         stats.vivify_subs += int(m.group(1))
+                        continue
+
+                    m = re.search(
+                        r"c \s+vivifysubasymtaut:\s+(\d+)",
+                        line
+                    )
+                    if m:
+                        stats.vivify_rat += int(m.group(1))
                         continue
 
                     m = re.search(
@@ -473,21 +520,26 @@ def createStats(solver_name: str, instance_stats: list[InstanceStats], setup: ty
     sat = 0
     unsat = 0
     par2 = 0
+    par1 = 0
 
     for instance in instance_stats:
         match instance.result:
             case RESULT.SAT:
                 sat +=1
                 par2 += instance.busy_time
+                par1 += instance.busy_time
             case RESULT.UNSAT:
                 unsat +=1
                 par2 += instance.busy_time
+                par1 += instance.busy_time
             case RESULT.UNKOWN:
                 par2 += 2*setup.timeout
+                par1 += setup.timeout
 
     par2 /= len(instance_stats)
+    par1 /= len(instance_stats)
 
-    return Stats(solver_name, len(instance_stats), sat + unsat, sat, unsat, par2, instance_stats)
+    return Stats(solver_name, len(instance_stats), sat + unsat, sat, unsat, par2, par1, instance_stats)
 
 def extract(results_dir):
     results_dir = Path(results_dir)
